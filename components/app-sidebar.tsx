@@ -56,24 +56,12 @@ const navMain = [
   },
   {
     title: "Settings",
-    url: "/setting",
+    url: "/account",
     icon: Settings2,
     items: [
       {
         title: "Account",
         url: "/account",
-      },
-      {
-        title: "Team",
-        url: "#",
-      },
-      {
-        title: "Billing",
-        url: "#",
-      },
-      {
-        title: "Limits",
-        url: "#",
       },
     ],
   },
