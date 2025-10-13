@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { User, Mail, Lock, Phone, MapPin, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -102,18 +103,16 @@ export default function AccountPage() {
       // Only include password if user is changing it
       if (formData.newPassword) {
         if (formData.newPassword !== formData.confirmPassword) {
-          setMessage({
-            type: "error",
-            text: "New passwords do not match",
+          toast.error("Passwords don't match", {
+            description: "New password and confirm password must be the same.",
           });
           setIsSaving(false);
           return;
         }
 
         if (formData.newPassword.length < 6) {
-          setMessage({
-            type: "error",
-            text: "Password must be at least 6 characters",
+          toast.error("Password too short", {
+            description: "Password must be at least 6 characters long.",
           });
           setIsSaving(false);
           return;
@@ -129,9 +128,8 @@ export default function AccountPage() {
       });
 
       if (response.ok) {
-        setMessage({
-          type: "success",
-          text: "Profile updated successfully!",
+        toast.success("Profile updated successfully!", {
+          description: "Your account information has been saved.",
         });
 
         // Clear password fields
@@ -149,16 +147,15 @@ export default function AccountPage() {
         router.refresh();
       } else {
         const error = await response.json();
-        setMessage({
-          type: "error",
-          text: error.error || "Failed to update profile",
+        toast.error("Failed to update profile", {
+          description: error.error || "Something went wrong. Please try again.",
         });
       }
     } catch (error) {
       console.error("Update error:", error);
-      setMessage({
-        type: "error",
-        text: "An error occurred while updating profile",
+      toast.error("Update failed", {
+        description:
+          "An unexpected error occurred while updating your profile.",
       });
     } finally {
       setIsSaving(false);

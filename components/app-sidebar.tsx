@@ -6,6 +6,24 @@ import { Command, Settings2, Users } from "lucide-react";
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
 import {
+  IconCamera,
+  IconChartBar,
+  IconDashboard,
+  IconDatabase,
+  IconFileAi,
+  IconFileDescription,
+  IconFileWord,
+  IconFolder,
+  IconHelp,
+  IconInnerShadowTop,
+  IconListDetails,
+  IconReport,
+  IconSearch,
+  IconSettings,
+  IconUsers,
+} from "@tabler/icons-react";
+
+import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -19,19 +37,19 @@ const navMain = [
   {
     title: "Dashboard",
     url: "/",
-    icon: Users,
+    icon: IconDashboard,
     isActive: true,
   },
   {
     title: "Client 1",
     url: "/client1",
-    icon: Users,
+    icon: IconListDetails,
     isActive: true,
   },
   {
     title: "Client 2",
     url: "/client2",
-    icon: Users,
+    icon: IconChartBar,
     isActive: true,
   },
   {
@@ -47,10 +65,6 @@ const navMain = [
       {
         title: "Roles",
         url: "/users/roles",
-      },
-      {
-        title: "Permissions",
-        url: "#",
       },
     ],
   },

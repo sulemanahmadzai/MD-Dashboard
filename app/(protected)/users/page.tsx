@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Plus, Pencil, Trash2, Search } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -43,7 +44,7 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: "admin" | "client1" | "client2";
+  role: string;
   gender?: "male" | "female" | "other" | "prefer_not_to_say" | null;
   phone?: string | null;
   address?: string | null;
@@ -52,14 +53,23 @@ interface User {
   updatedAt: string;
 }
 
-const roleColors = {
-  admin: "destructive",
-  client1: "default",
-  client2: "secondary",
-} as const;
+interface Role {
+  id: string;
+  name: string;
+  description?: string | null;
+}
+
+const getRoleColor = (role: string) => {
+  const lowerRole = role.toLowerCase();
+  if (lowerRole === "admin") return "destructive";
+  if (lowerRole.includes("client1")) return "default";
+  if (lowerRole.includes("client2")) return "secondary";
+  return "outline";
+};
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -70,7 +80,7 @@ export default function UsersPage() {
     name: "",
     email: "",
     password: "",
-    role: "client1" as "admin" | "client1" | "client2",
+    role: "",
     gender: "" as "male" | "female" | "other" | "prefer_not_to_say" | "",
     phone: "",
     address: "",
@@ -79,6 +89,7 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchUsers();
+    fetchRoles();
   }, []);
 
   const fetchUsers = async () => {
@@ -90,6 +101,16 @@ export default function UsersPage() {
       console.error("Error fetching users:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRoles = async () => {
+    try {
+      const response = await fetch("/api/roles");
+      const data = await response.json();
+      setRoles(data);
+    } catch (error) {
+      console.error("Error fetching roles:", error);
     }
   };
 
@@ -119,13 +140,27 @@ export default function UsersPage() {
       if (response.ok) {
         await fetchUsers();
         handleCloseDialog();
+        toast.success(
+          editingUser
+            ? "User updated successfully!"
+            : "User created successfully!",
+          {
+            description: `${formData.name} has been ${
+              editingUser ? "updated" : "added"
+            } to the system.`,
+          }
+        );
       } else {
         const error = await response.json();
-        alert(error.error || "Failed to save user");
+        toast.error("Failed to save user", {
+          description: error.error || "Something went wrong. Please try again.",
+        });
       }
     } catch (error) {
       console.error("Error saving user:", error);
-      alert("Failed to save user");
+      toast.error("Failed to save user", {
+        description: "An unexpected error occurred.",
+      });
     }
   };
 
@@ -141,13 +176,20 @@ export default function UsersPage() {
         await fetchUsers();
         setIsDeleteDialogOpen(false);
         setDeletingUserId(null);
+        toast.success("User deleted successfully!", {
+          description: "The user has been removed from the system.",
+        });
       } else {
         const error = await response.json();
-        alert(error.error || "Failed to delete user");
+        toast.error("Failed to delete user", {
+          description: error.error || "Something went wrong. Please try again.",
+        });
       }
     } catch (error) {
       console.error("Error deleting user:", error);
-      alert("Failed to delete user");
+      toast.error("Failed to delete user", {
+        description: "An unexpected error occurred.",
+      });
     }
   };
 
@@ -261,7 +303,7 @@ export default function UsersPage() {
                         </TableCell>
                         <TableCell>{user.email}</TableCell>
                         <TableCell>
-                          <Badge variant={roleColors[user.role]}>
+                          <Badge variant={getRoleColor(user.role) as any}>
                             {user.role}
                           </Badge>
                         </TableCell>
@@ -373,12 +415,20 @@ export default function UsersPage() {
                     }
                   >
                     <SelectTrigger id="role">
-                      <SelectValue />
+                      <SelectValue placeholder="Select role" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="client1">Client 1</SelectItem>
-                      <SelectItem value="client2">Client 2</SelectItem>
+                      {roles.length === 0 ? (
+                        <SelectItem value="" disabled>
+                          No roles available
+                        </SelectItem>
+                      ) : (
+                        roles.map((role) => (
+                          <SelectItem key={role.id} value={role.name}>
+                            {role.name}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                 </div>

@@ -10,15 +10,15 @@ async function seed() {
     console.log("Creating default roles...");
     const defaultRoles = [
       {
-        name: "Admin",
+        name: "admin",
         description: "Full access to all features and settings",
       },
       {
-        name: "Client 1 Manager",
+        name: "client1",
         description: "Access to Client 1 portal and features",
       },
       {
-        name: "Client 2 Manager",
+        name: "client2",
         description: "Access to Client 2 portal and features",
       },
     ];
@@ -65,7 +65,7 @@ async function seed() {
         name: "Client 1 User",
         email: "client1@example.com",
         password: await bcrypt.hash("client123", 10),
-        role: "client1" as const,
+        role: "client1",
         gender: "male" as const,
         phone: "+1234567891",
         isVerified: true,
@@ -74,7 +74,7 @@ async function seed() {
         name: "Client 2 User",
         email: "client2@example.com",
         password: await bcrypt.hash("client123", 10),
-        role: "client2" as const,
+        role: "client2",
         gender: "female" as const,
         phone: "+1234567892",
         isVerified: true,

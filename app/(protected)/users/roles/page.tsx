@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Plus, Pencil, Trash2, Search, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -84,13 +85,27 @@ export default function RolesPage() {
       if (response.ok) {
         await fetchRoles();
         handleCloseDialog();
+        toast.success(
+          editingRole
+            ? "Role updated successfully!"
+            : "Role created successfully!",
+          {
+            description: `${formData.name} has been ${
+              editingRole ? "updated" : "added"
+            }.`,
+          }
+        );
       } else {
         const error = await response.json();
-        alert(error.error || "Failed to save role");
+        toast.error("Failed to save role", {
+          description: error.error || "Something went wrong. Please try again.",
+        });
       }
     } catch (error) {
       console.error("Error saving role:", error);
-      alert("Failed to save role");
+      toast.error("Failed to save role", {
+        description: "An unexpected error occurred.",
+      });
     }
   };
 
@@ -106,13 +121,20 @@ export default function RolesPage() {
         await fetchRoles();
         setIsDeleteDialogOpen(false);
         setDeletingRoleId(null);
+        toast.success("Role deleted successfully!", {
+          description: "The role has been removed from the system.",
+        });
       } else {
         const error = await response.json();
-        alert(error.error || "Failed to delete role");
+        toast.error("Failed to delete role", {
+          description: error.error || "Something went wrong. Please try again.",
+        });
       }
     } catch (error) {
       console.error("Error deleting role:", error);
-      alert("Failed to delete role");
+      toast.error("Failed to delete role", {
+        description: "An unexpected error occurred.",
+      });
     }
   };
 

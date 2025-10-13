@@ -10,9 +10,6 @@ import {
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Enum for user roles
-export const roleEnum = pgEnum("role", ["admin", "client1", "client2"]);
-
 // Enum for gender
 export const genderEnum = pgEnum("gender", [
   "male",
@@ -29,7 +26,7 @@ export const users = pgTable("users", {
   name: varchar("name", { length: 255 }).notNull(),
   email: varchar("email", { length: 255 }).notNull().unique(),
   password: varchar("password", { length: 255 }).notNull(),
-  role: roleEnum("role").notNull().default("client1"),
+  role: varchar("role", { length: 50 }).notNull().default("admin"),
   gender: genderEnum("gender"),
   phone: varchar("phone", { length: 20 }),
   address: text("address"),

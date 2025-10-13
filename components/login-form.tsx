@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,8 +49,16 @@ export function LoginForm({
 
       if (!response.ok) {
         setError(data.error || "Login failed");
+        toast.error("Login failed", {
+          description:
+            data.error || "Invalid email or password. Please try again.",
+        });
         return;
       }
+
+      toast.success("Login successful!", {
+        description: `Welcome back! Redirecting to your dashboard...`,
+      });
 
       // Navigate based on user role
       if (data.role === "admin") {
@@ -66,6 +75,9 @@ export function LoginForm({
       router.refresh();
     } catch (err) {
       setError("An error occurred. Please try again.");
+      toast.error("Something went wrong", {
+        description: "An unexpected error occurred. Please try again.",
+      });
       console.error("Login error:", err);
     } finally {
       setIsSubmitting(false);

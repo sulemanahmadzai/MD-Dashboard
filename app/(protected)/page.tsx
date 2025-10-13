@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Upload, CheckCircle, FileText } from "lucide-react";
+import { toast } from "sonner";
 
 interface UploadStatus {
   shopify: boolean;
@@ -66,8 +67,9 @@ export default function DashboardPage() {
     if (!file) return;
 
     if (!file.name.toLowerCase().endsWith(".csv")) {
-      setMessage(`Please upload a valid CSV file for ${fileType}`);
-      setTimeout(() => setMessage(""), 3000);
+      toast.error("Invalid file type", {
+        description: `Please upload a valid CSV file for ${fileType}`,
+      });
       return;
     }
 
@@ -94,15 +96,19 @@ export default function DashboardPage() {
         throw new Error(errorData.error || "Upload failed");
       }
 
-      setMessage(`${fileType} data uploaded successfully!`);
+      setMessage("");
       setUploadStatus((prev) => ({ ...prev, [fileType]: true }));
 
-      // Clear the message after 3 seconds
-      setTimeout(() => setMessage(""), 3000);
+      toast.success("CSV uploaded successfully!", {
+        description: `${fileType} data has been uploaded and is now available to clients.`,
+      });
     } catch (error: any) {
       console.error("Upload error:", error);
-      setMessage(`Upload failed: ${error.message}`);
-      setTimeout(() => setMessage(""), 5000);
+      setMessage("");
+      toast.error("Upload failed", {
+        description:
+          error.message || "An unexpected error occurred while uploading.",
+      });
     } finally {
       setUploading(false);
       // Reset file input
