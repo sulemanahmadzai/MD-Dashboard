@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Upload,
   CheckCircle,
@@ -29,10 +29,10 @@ import {
 
 export default function PLDashboard() {
   const [activeTab, setActiveTab] = useState("pl");
-  const [plFile, setPlFile] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [status, setStatus] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
+  const [dataLoaded, setDataLoaded] = useState(false);
   const [unclassifiedItems, setUnclassifiedItems] = useState([]);
   const [showClassificationModal, setShowClassificationModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -201,32 +201,50 @@ export default function PLDashboard() {
     "Financing Cost",
   ];
 
-  const handleFileUpload = (event) => {
-    const file = event.target.files[0];
-    if (file && file.name.toLowerCase().endsWith(".csv")) {
-      setPlFile(file);
-      setStatus(null);
-    } else {
+  // Auto-fetch and process data on component mount
+  useEffect(() => {
+    fetchAndProcessData();
+  }, []);
+
+  const fetchAndProcessData = async () => {
+    setProcessing(true);
+    setStatus({ type: "info", message: "Loading P&L data from server..." });
+
+    try {
+      const response = await fetch("/api/csv-data");
+      if (!response.ok) throw new Error("Failed to fetch data");
+
+      const data = await response.json();
+
+      // Check if P&L data exists (Client 2)
+      if (!data.pl_client2) {
+        setStatus({
+          type: "error",
+          message: "No P&L data available. Please contact your administrator to upload data.",
+        });
+        setProcessing(false);
+        return;
+      }
+
+      // Process the fetched P&L data
+      await handleProcess(data.pl_client2);
+      setDataLoaded(true);
+    } catch (error) {
       setStatus({
         type: "error",
-        message: "Please upload a CSV file (convert Excel to CSV first)",
+        message: `Error loading data: ${error.message}`,
       });
+      setProcessing(false);
     }
   };
 
-  const handleProcess = async () => {
-    if (!plFile) {
-      setStatus({ type: "error", message: "Please upload a P&L CSV file" });
-      return;
-    }
-
+  const handleProcess = async (rawPlData) => {
     setProcessing(true);
-    setStatus({ type: "info", message: "Processing..." });
+    setStatus({ type: "info", message: "Processing P&L data..." });
 
     try {
-      const Papa = await import("papaparse");
-      const text = await plFile.text();
-      const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+      // rawPlData is already parsed JSON from the server
+      const parsed = { data: rawPlData, meta: { fields: Object.keys(rawPlData[0] || {}) } };
 
       const accountColumn = parsed.meta.fields[0];
       const allColumns = parsed.meta.fields;
@@ -912,42 +930,7 @@ export default function PLDashboard() {
         {activeTab === "pl" && (
           <>
             <div className="max-w-2xl mx-auto mb-6">
-              <div
-                className={`bg-white rounded-xl shadow-lg p-6 border-2 ${
-                  plFile ? "border-green-400" : "border-gray-200"
-                }`}
-              >
-                <h3 className="text-lg font-semibold mb-4">
-                  Upload P&L (CSV only)
-                </h3>
-                {!plFile ? (
-                  <label className="cursor-pointer block">
-                    <input
-                      type="file"
-                      accept=".csv"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                    />
-                    <div className="border-2 border-dashed border-indigo-300 rounded-lg p-6 text-center hover:bg-indigo-50">
-                      <Upload className="w-10 h-10 text-indigo-400 mx-auto mb-2" />
-                      <p className="text-sm text-gray-600">Upload CSV</p>
-                      <p className="text-xs text-gray-400 mt-1">
-                        Convert Excel to CSV first
-                      </p>
-                    </div>
-                  </label>
-                ) : (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
-                    <CheckCircle className="w-6 h-6 text-green-600" />
-                    <p className="text-sm font-medium flex-1">{plFile.name}</p>
-                    <button onClick={() => setPlFile(null)}>
-                      <X className="w-5 h-5 text-gray-400 hover:text-red-500" />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-gray-200 mt-4">
+              <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-gray-200">
                 <h3 className="text-lg font-semibold mb-4">Headcount</h3>
                 <input
                   type="number"
@@ -964,10 +947,10 @@ export default function PLDashboard() {
               <div
                 className={`rounded-lg p-4 mb-6 flex items-center gap-3 ${
                   status.type === "success"
-                    ? "bg-green-50"
+                    ? "bg-green-50 border border-green-200"
                     : status.type === "error"
-                    ? "bg-red-50"
-                    : "bg-blue-50"
+                    ? "bg-red-50 border border-red-200"
+                    : "bg-blue-50 border border-blue-200"
                 }`}
               >
                 {status.type === "success" && (
@@ -983,13 +966,14 @@ export default function PLDashboard() {
               </div>
             )}
 
-            <button
-              onClick={handleProcess}
-              disabled={processing || !plFile}
-              className="w-full bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-300 mb-6"
-            >
-              {processing ? "Processing..." : "Process P&L Data"}
-            </button>
+            {!dataLoaded && !status && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6 flex items-center gap-3">
+                <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
+                <p className="text-sm font-medium text-blue-800">
+                  Loading P&L data from server...
+                </p>
+              </div>
+            )}
 
             {showClassificationModal && (
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">

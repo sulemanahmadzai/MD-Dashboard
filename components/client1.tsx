@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Upload,
   CheckCircle,
@@ -11,14 +11,11 @@ import {
 } from "lucide-react";
 
 export default function OrderUnifier() {
-  const [shopifyFile, setShopifyFile] = useState(null);
-  const [tiktokFile, setTiktokFile] = useState(null);
-  const [subscriptionFile, setSubscriptionFile] = useState(null);
-  const [plFile, setPlFile] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [status, setStatus] = useState(null);
   const [downloadLinks, setDownloadLinks] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
+  const [dataLoaded, setDataLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState("financials");
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedSentimentCategory, setSelectedSentimentCategory] =
@@ -35,16 +32,46 @@ export default function OrderUnifier() {
     uncategorized: false,
   });
 
-  const handleFileUpload = (event, platform) => {
-    const file = event.target.files[0];
-    if (file && file.name.toLowerCase().endsWith(".csv")) {
-      if (platform === "shopify") setShopifyFile(file);
-      else if (platform === "tiktok") setTiktokFile(file);
-      else if (platform === "subscription") setSubscriptionFile(file);
-      else if (platform === "pl") setPlFile(file);
-      setStatus(null);
-    } else {
-      setStatus({ type: "error", message: "Please upload a valid CSV file" });
+  // Auto-fetch and process data on component mount
+  useEffect(() => {
+    fetchAndProcessData();
+  }, []);
+
+  const fetchAndProcessData = async () => {
+    setProcessing(true);
+    setStatus({ type: "info", message: "Loading data from server..." });
+
+    try {
+      const response = await fetch("/api/csv-data");
+      if (!response.ok) throw new Error("Failed to fetch data");
+
+      const data = await response.json();
+
+      // Check if any data exists
+      if (
+        !data.shopify &&
+        !data.tiktok &&
+        !data.subscription &&
+        !data.pl_client1
+      ) {
+        setStatus({
+          type: "error",
+          message:
+            "No data available. Please contact your administrator to upload data.",
+        });
+        setProcessing(false);
+        return;
+      }
+
+      // Process the fetched data
+      await handleProcess(data);
+      setDataLoaded(true);
+    } catch (error) {
+      setStatus({
+        type: "error",
+        message: `Error loading data: ${error.message}`,
+      });
+      setProcessing(false);
     }
   };
 
@@ -162,52 +189,35 @@ export default function OrderUnifier() {
       Customer_Email: row["Buyer Username"] || "",
     }));
 
-  const handleProcess = async () => {
-    if (!shopifyFile && !tiktokFile && !subscriptionFile && !plFile) {
-      setStatus({ type: "error", message: "Please upload at least one file" });
-      return;
-    }
+  const handleProcess = async (data) => {
     setProcessing(true);
-    setStatus({ type: "info", message: "Processing..." });
+    setStatus({ type: "info", message: "Processing data..." });
 
     try {
-      const Papa = await import("papaparse");
       let masterData = [];
       let subscriptionData = null;
       let plData = null;
 
-      if (shopifyFile) {
-        const text = await shopifyFile.text();
-        masterData = [
-          ...masterData,
-          ...normalizeShopify(
-            Papa.parse(text, { header: true, skipEmptyLines: true }).data
-          ),
-        ];
+      // Process Shopify data
+      if (data.shopify) {
+        masterData = [...masterData, ...normalizeShopify(data.shopify)];
       }
-      if (tiktokFile) {
-        const text = await tiktokFile.text();
-        masterData = [
-          ...masterData,
-          ...normalizeTikTok(
-            Papa.parse(text, { header: true, skipEmptyLines: true }).data
-          ),
-        ];
-      }
-      if (subscriptionFile) {
-        subscriptionData = Papa.parse(await subscriptionFile.text(), {
-          header: true,
-          skipEmptyLines: true,
-        }).data;
-      }
-      if (plFile) {
-        const parsed = Papa.parse(await plFile.text(), {
-          header: true,
-          skipEmptyLines: true,
-        });
-        const accountColumn = parsed.meta.fields[0];
 
-        plData = parsed.data.filter((row) => {
+      // Process TikTok data
+      if (data.tiktok) {
+        masterData = [...masterData, ...normalizeTikTok(data.tiktok)];
+      }
+
+      // Process Subscription data
+      if (data.subscription) {
+        subscriptionData = data.subscription;
+      }
+
+      // Process P&L data (Client 1)
+      if (data.pl_client1) {
+        const accountColumn = Object.keys(data.pl_client1[0])[0];
+
+        plData = data.pl_client1.filter((row) => {
           const lineItem = row[accountColumn];
           if (!lineItem?.trim()) return false;
 
@@ -249,18 +259,23 @@ export default function OrderUnifier() {
         plData.mappings = mappings;
       }
 
-      const csvUrl = URL.createObjectURL(
-        new Blob([masterData.length > 0 ? Papa.unparse(masterData) : ""], {
-          type: "text/csv",
-        })
-      );
-      setDownloadLinks({ csv: csvUrl });
+      // Generate CSV download link
+      if (masterData.length > 0) {
+        const Papa = await import("papaparse");
+        const csvUrl = URL.createObjectURL(
+          new Blob([Papa.unparse(masterData)], {
+            type: "text/csv",
+          })
+        );
+        setDownloadLinks({ csv: csvUrl });
+      }
+
       setDashboardData({
         masterData,
         subscriptionData,
         plData,
       });
-      setStatus({ type: "success", message: "Processing complete!" });
+      setStatus({ type: "success", message: "Data loaded successfully!" });
       setProcessing(false);
     } catch (error) {
       setProcessing(false);
@@ -286,66 +301,14 @@ export default function OrderUnifier() {
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6 mb-6">
-          {[
-            { platform: "shopify", label: "Shopify Orders", file: shopifyFile },
-            { platform: "tiktok", label: "TikTok Orders", file: tiktokFile },
-            {
-              platform: "subscription",
-              label: "Subscriptions",
-              file: subscriptionFile,
-            },
-            { platform: "pl", label: "P&L (QuickBooks)", file: plFile },
-          ].map(({ platform, label, file }) => (
-            <div
-              key={platform}
-              className={`bg-white rounded-xl shadow-lg p-6 border-2 ${
-                file ? "border-green-400" : "border-gray-200"
-              }`}
-            >
-              <h3 className="text-lg font-semibold mb-4">{label}</h3>
-              {!file ? (
-                <label className="cursor-pointer block">
-                  <input
-                    type="file"
-                    accept=".csv"
-                    onChange={(e) => handleFileUpload(e, platform)}
-                    className="hidden"
-                  />
-                  <div className="border-2 border-dashed border-indigo-300 rounded-lg p-6 text-center hover:bg-indigo-50">
-                    <Upload className="w-10 h-10 text-indigo-400 mx-auto mb-2" />
-                    <p className="text-sm text-gray-600">Upload CSV</p>
-                  </div>
-                </label>
-              ) : (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
-                  <CheckCircle className="w-6 h-6 text-green-600" />
-                  <p className="text-sm font-medium flex-1">{file.name}</p>
-                  <button
-                    onClick={() => {
-                      if (platform === "shopify") setShopifyFile(null);
-                      else if (platform === "tiktok") setTiktokFile(null);
-                      else if (platform === "subscription")
-                        setSubscriptionFile(null);
-                      else if (platform === "pl") setPlFile(null);
-                    }}
-                  >
-                    <X className="w-5 h-5 text-gray-400 hover:text-red-500" />
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
         {status && (
           <div
             className={`rounded-lg p-4 mb-6 flex items-center gap-3 ${
               status.type === "success"
-                ? "bg-green-50"
+                ? "bg-green-50 border border-green-200"
                 : status.type === "error"
-                ? "bg-red-50"
-                : "bg-blue-50"
+                ? "bg-red-50 border border-red-200"
+                : "bg-blue-50 border border-blue-200"
             }`}
           >
             {status.type === "success" && (
@@ -361,16 +324,14 @@ export default function OrderUnifier() {
           </div>
         )}
 
-        <button
-          onClick={handleProcess}
-          disabled={
-            processing ||
-            (!shopifyFile && !tiktokFile && !subscriptionFile && !plFile)
-          }
-          className="w-full bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-300 mb-6"
-        >
-          {processing ? "Processing..." : "Process Uploaded Data"}
-        </button>
+        {!dataLoaded && !status && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6 flex items-center gap-3">
+            <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
+            <p className="text-sm font-medium text-blue-800">
+              Loading data from server...
+            </p>
+          </div>
+        )}
 
         {downloadLinks && (
           <div className="bg-white rounded-xl p-6 mb-6 border-2 border-indigo-200">

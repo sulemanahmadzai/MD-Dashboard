@@ -5,6 +5,7 @@ import {
   timestamp,
   boolean,
   pgEnum,
+  json,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -48,6 +49,20 @@ export const roles = pgTable("roles", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// CSV Uploads table (for storing uploaded CSV data)
+export const csvUploads = pgTable("csv_uploads", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  fileType: varchar("file_type", { length: 50 }).notNull(), // 'shopify', 'tiktok', 'subscription', 'pl_client1', 'pl_client2'
+  data: json("data").notNull(), // Store processed CSV data as JSON
+  uploadedBy: text("uploaded_by")
+    .notNull()
+    .references(() => users.id),
+  uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
+  isActive: boolean("is_active").notNull().default(true),
+});
+
 // Zod schemas for validation
 export const insertUserSchema = createInsertSchema(users, {
   email: z.string().email("Invalid email address"),
@@ -74,8 +89,26 @@ export const insertRoleSchema = createInsertSchema(roles, {
 
 export const selectRoleSchema = createSelectSchema(roles);
 
+export const insertCSVUploadSchema = createInsertSchema(csvUploads, {
+  fileType: z.enum([
+    "shopify",
+    "tiktok",
+    "subscription",
+    "pl_client1",
+    "pl_client2",
+  ]),
+  data: z.any(),
+}).omit({
+  id: true,
+  uploadedAt: true,
+});
+
+export const selectCSVUploadSchema = createSelectSchema(csvUploads);
+
 // Types
 export type User = typeof users.$inferSelect;
 export type NewUser = z.infer<typeof insertUserSchema>;
 export type Role = typeof roles.$inferSelect;
 export type NewRole = z.infer<typeof insertRoleSchema>;
+export type CSVUpload = typeof csvUploads.$inferSelect;
+export type NewCSVUpload = z.infer<typeof insertCSVUploadSchema>;

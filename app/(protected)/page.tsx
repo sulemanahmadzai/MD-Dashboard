@@ -1,24 +1,238 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Upload, CheckCircle, FileText } from "lucide-react";
+
+interface UploadStatus {
+  shopify: boolean;
+  tiktok: boolean;
+  subscription: boolean;
+  pl_client1: boolean;
+  pl_client2: boolean;
+}
+
 export default function DashboardPage() {
+  const [session, setSession] = useState<any>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>({
+    shopify: false,
+    tiktok: false,
+    subscription: false,
+    pl_client1: false,
+    pl_client2: false,
+  });
+  const [message, setMessage] = useState("");
+  const router = useRouter();
+
+  useEffect(() => {
+    // Fetch session to verify admin access
+    fetch("/api/auth/me")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.role !== "admin") {
+          router.push("/unauthorized");
+        }
+        setSession(data);
+      })
+      .catch((err) => {
+        console.error("Session fetch error:", err);
+        router.push("/login");
+      });
+
+    // Check what files are already uploaded
+    checkUploadedFiles();
+  }, []);
+
+  const checkUploadedFiles = async () => {
+    try {
+      const response = await fetch("/api/csv-data");
+      const data = await response.json();
+
+      setUploadStatus({
+        shopify: !!data.shopify,
+        tiktok: !!data.tiktok,
+        subscription: !!data.subscription,
+        pl_client1: !!data.pl_client1,
+        pl_client2: !!data.pl_client2,
+      });
+    } catch (error) {
+      console.error("Error checking uploaded files:", error);
+    }
+  };
+
+  const handleFileUpload = async (event: any, fileType: string) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      setMessage(`Please upload a valid CSV file for ${fileType}`);
+      setTimeout(() => setMessage(""), 3000);
+      return;
+    }
+
+    setUploading(true);
+    setMessage(`Uploading ${fileType} data...`);
+
+    try {
+      const Papa = await import("papaparse");
+      const text = await file.text();
+      const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+
+      // Upload to backend
+      const response = await fetch("/api/csv-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileType,
+          data: parsed.data,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Upload failed");
+      }
+
+      setMessage(`${fileType} data uploaded successfully!`);
+      setUploadStatus((prev) => ({ ...prev, [fileType]: true }));
+
+      // Clear the message after 3 seconds
+      setTimeout(() => setMessage(""), 3000);
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      setMessage(`Upload failed: ${error.message}`);
+      setTimeout(() => setMessage(""), 5000);
+    } finally {
+      setUploading(false);
+      // Reset file input
+      event.target.value = "";
+    }
+  };
+
+  if (!session) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-6">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  const fileTypes = [
+    {
+      key: "shopify",
+      label: "Shopify Orders",
+      color: "from-green-500 to-emerald-600",
+    },
+    {
+      key: "tiktok",
+      label: "TikTok Orders",
+      color: "from-blue-500 to-indigo-600",
+    },
+    {
+      key: "subscription",
+      label: "Subscriptions",
+      color: "from-purple-500 to-pink-600",
+    },
+    {
+      key: "pl_client1",
+      label: "P&L - Client 1",
+      color: "from-orange-500 to-red-600",
+    },
+    {
+      key: "pl_client2",
+      label: "P&L - Client 2",
+      color: "from-pink-500 to-rose-600",
+    },
+  ];
+
   return (
-    <div className="flex flex-1 flex-col gap-4 p-6">
+    <div className="flex flex-1 flex-col gap-6 p-6">
       <div className="flex items-center gap-4">
-        <h1 className="text-3xl font-bold tracking-tight">
-          Analytics Dashboard
-        </h1>
-      </div>
-      <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-        <div className="bg-muted/50 aspect-video rounded-xl flex items-center justify-center">
-          <p className="text-muted-foreground">Chart 1</p>
-        </div>
-        <div className="bg-muted/50 aspect-video rounded-xl flex items-center justify-center">
-          <p className="text-muted-foreground">Chart 2</p>
-        </div>
-        <div className="bg-muted/50 aspect-video rounded-xl flex items-center justify-center">
-          <p className="text-muted-foreground">Chart 3</p>
+        <FileText className="w-8 h-8 text-indigo-600" />
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Admin Dashboard</h1>
+          <p className="text-muted-foreground mt-1">
+            Upload CSV files for all clients to view
+          </p>
         </div>
       </div>
-      <div className="bg-muted/50 min-h-[400px] flex-1 rounded-xl flex items-center justify-center">
-        <p className="text-muted-foreground">Analytics Content</p>
+
+      {message && (
+        <div
+          className={`rounded-lg p-4 ${
+            message.includes("success")
+              ? "bg-green-50 text-green-800 border border-green-200"
+              : message.includes("failed")
+              ? "bg-red-50 text-red-800 border border-red-200"
+              : "bg-blue-50 text-blue-800 border border-blue-200"
+          }`}
+        >
+          {message}
+        </div>
+      )}
+
+      <div className="grid md:grid-cols-2 gap-6">
+        {fileTypes.map(({ key, label, color }) => (
+          <div
+            key={key}
+            className={`bg-white rounded-xl shadow-lg p-6 border-2 ${
+              uploadStatus[key as keyof UploadStatus]
+                ? "border-green-400"
+                : "border-gray-200"
+            }`}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">{label}</h3>
+              {uploadStatus[key as keyof UploadStatus] && (
+                <CheckCircle className="w-5 h-5 text-green-600" />
+              )}
+            </div>
+
+            <label className="cursor-pointer block">
+              <input
+                type="file"
+                accept=".csv"
+                onChange={(e) => handleFileUpload(e, key)}
+                disabled={uploading}
+                className="hidden"
+              />
+              <div
+                className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                  uploading
+                    ? "border-gray-300 bg-gray-50"
+                    : uploadStatus[key as keyof UploadStatus]
+                    ? "border-green-300 bg-green-50 hover:bg-green-100"
+                    : "border-indigo-300 bg-indigo-50 hover:bg-indigo-100"
+                }`}
+              >
+                <Upload className="w-10 h-10 text-indigo-400 mx-auto mb-2" />
+                <p className="text-sm font-medium text-gray-700">
+                  {uploadStatus[key as keyof UploadStatus]
+                    ? "Click to re-upload CSV"
+                    : "Click to upload CSV"}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {uploadStatus[key as keyof UploadStatus]
+                    ? "File already uploaded"
+                    : "No file uploaded yet"}
+                </p>
+              </div>
+            </label>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-blue-50 rounded-lg p-5 border border-blue-200">
+        <h4 className="font-semibold text-blue-900 mb-2">📝 Instructions</h4>
+        <ul className="text-sm text-blue-800 space-y-1">
+          <li>• Upload CSV files for each data source</li>
+          <li>
+            • All clients (Client 1 and Client 2) will see the uploaded data
+          </li>
+          <li>• Re-uploading a file will replace the previous data</li>
+          <li>• Only administrators can upload files</li>
+        </ul>
       </div>
     </div>
   );
