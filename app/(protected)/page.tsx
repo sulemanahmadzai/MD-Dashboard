@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Upload, CheckCircle, FileText } from "lucide-react";
 import { toast } from "sonner";
+import { useCSVStatus } from "@/lib/hooks/use-csv-data";
+import { clearCache } from "@/lib/cache";
 
 interface UploadStatus {
   shopify: boolean;
@@ -16,15 +18,20 @@ interface UploadStatus {
 export default function DashboardPage() {
   const [session, setSession] = useState<any>(null);
   const [uploading, setUploading] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState<UploadStatus>({
+  const [message, setMessage] = useState("");
+  const router = useRouter();
+
+  // Use React Query hook for CSV status (lightweight, cached)
+  const { data: uploadStatus, refetch: refetchStatus } = useCSVStatus();
+
+  // Default status while loading
+  const status = uploadStatus || {
     shopify: false,
     tiktok: false,
     subscription: false,
     pl_client1: false,
     pl_client2: false,
-  });
-  const [message, setMessage] = useState("");
-  const router = useRouter();
+  };
 
   useEffect(() => {
     // Fetch session to verify admin access
@@ -40,27 +47,7 @@ export default function DashboardPage() {
         console.error("Session fetch error:", err);
         router.push("/login");
       });
-
-    // Check what files are already uploaded
-    checkUploadedFiles();
   }, []);
-
-  const checkUploadedFiles = async () => {
-    try {
-      const response = await fetch("/api/csv-data");
-      const data = await response.json();
-
-      setUploadStatus({
-        shopify: !!data.shopify,
-        tiktok: !!data.tiktok,
-        subscription: !!data.subscription,
-        pl_client1: !!data.pl_client1,
-        pl_client2: !!data.pl_client2,
-      });
-    } catch (error) {
-      console.error("Error checking uploaded files:", error);
-    }
-  };
 
   const handleFileUpload = async (event: any, fileType: string) => {
     const file = event.target.files[0];
@@ -97,7 +84,11 @@ export default function DashboardPage() {
       }
 
       setMessage("");
-      setUploadStatus((prev) => ({ ...prev, [fileType]: true }));
+
+      // Clear cache and refetch status
+      clearCache("csv-data");
+      clearCache("csv-status");
+      refetchStatus();
 
       toast.success("CSV uploaded successfully!", {
         description: `${fileType} data has been uploaded and is now available to clients.`,
@@ -183,14 +174,14 @@ export default function DashboardPage() {
           <div
             key={key}
             className={`bg-white rounded-xl shadow-lg p-6 border-2 ${
-              uploadStatus[key as keyof UploadStatus]
+              status[key as keyof UploadStatus]
                 ? "border-green-400"
                 : "border-gray-200"
             }`}
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">{label}</h3>
-              {uploadStatus[key as keyof UploadStatus] && (
+              {status[key as keyof UploadStatus] && (
                 <CheckCircle className="w-5 h-5 text-green-600" />
               )}
             </div>
@@ -207,19 +198,19 @@ export default function DashboardPage() {
                 className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
                   uploading
                     ? "border-gray-300 bg-gray-50"
-                    : uploadStatus[key as keyof UploadStatus]
+                    : status[key as keyof UploadStatus]
                     ? "border-green-300 bg-green-50 hover:bg-green-100"
                     : "border-indigo-300 bg-indigo-50 hover:bg-indigo-100"
                 }`}
               >
                 <Upload className="w-10 h-10 text-indigo-400 mx-auto mb-2" />
                 <p className="text-sm font-medium text-gray-700">
-                  {uploadStatus[key as keyof UploadStatus]
+                  {status[key as keyof UploadStatus]
                     ? "Click to re-upload CSV"
                     : "Click to upload CSV"}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {uploadStatus[key as keyof UploadStatus]
+                  {status[key as keyof UploadStatus]
                     ? "File already uploaded"
                     : "No file uploaded yet"}
                 </p>

@@ -9,6 +9,7 @@ import {
   FileText,
   Download,
 } from "lucide-react";
+import { useCSVData } from "@/lib/hooks/use-csv-data";
 
 export default function OrderUnifier() {
   const [processing, setProcessing] = useState(false);
@@ -32,21 +33,35 @@ export default function OrderUnifier() {
     uncategorized: false,
   });
 
-  // Auto-fetch and process data on component mount
-  useEffect(() => {
-    fetchAndProcessData();
-  }, []);
+  // Use React Query hook for cached data
+  const { data: csvData, isLoading, error } = useCSVData();
 
-  const fetchAndProcessData = async () => {
+  // Auto-process data when it's available
+  useEffect(() => {
+    if (csvData && !dataLoaded) {
+      processData(csvData);
+    }
+  }, [csvData, dataLoaded]);
+
+  // Handle loading and error states
+  useEffect(() => {
+    if (isLoading) {
+      setStatus({ type: "info", message: "Loading data from server..." });
+      setProcessing(true);
+    } else if (error) {
+      setStatus({
+        type: "error",
+        message: `Error loading data: ${error.message}`,
+      });
+      setProcessing(false);
+    }
+  }, [isLoading, error]);
+
+  const processData = async (data: any) => {
     setProcessing(true);
-    setStatus({ type: "info", message: "Loading data from server..." });
+    setStatus({ type: "info", message: "Processing data..." });
 
     try {
-      const response = await fetch("/api/csv-data");
-      if (!response.ok) throw new Error("Failed to fetch data");
-
-      const data = await response.json();
-
       // Check if any data exists
       if (
         !data.shopify &&
@@ -66,10 +81,10 @@ export default function OrderUnifier() {
       // Process the fetched data
       await handleProcess(data);
       setDataLoaded(true);
-    } catch (error) {
+    } catch (error: any) {
       setStatus({
         type: "error",
-        message: `Error loading data: ${error.message}`,
+        message: `Error processing data: ${error.message}`,
       });
       setProcessing(false);
     }

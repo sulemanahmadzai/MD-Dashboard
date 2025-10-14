@@ -26,6 +26,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { useCSVData } from "@/lib/hooks/use-csv-data";
 
 export default function PLDashboard() {
   const [activeTab, setActiveTab] = useState("pl");
@@ -201,26 +202,41 @@ export default function PLDashboard() {
     "Financing Cost",
   ];
 
-  // Auto-fetch and process data on component mount
-  useEffect(() => {
-    fetchAndProcessData();
-  }, []);
+  // Use React Query hook for cached data
+  const { data: csvData, isLoading, error } = useCSVData();
 
-  const fetchAndProcessData = async () => {
+  // Auto-process data when it's available
+  useEffect(() => {
+    if (csvData && !dataLoaded) {
+      processData(csvData);
+    }
+  }, [csvData, dataLoaded]);
+
+  // Handle loading and error states
+  useEffect(() => {
+    if (isLoading) {
+      setStatus({ type: "info", message: "Loading P&L data from server..." });
+      setProcessing(true);
+    } else if (error) {
+      setStatus({
+        type: "error",
+        message: `Error loading data: ${error.message}`,
+      });
+      setProcessing(false);
+    }
+  }, [isLoading, error]);
+
+  const processData = async (data: any) => {
     setProcessing(true);
-    setStatus({ type: "info", message: "Loading P&L data from server..." });
+    setStatus({ type: "info", message: "Processing P&L data..." });
 
     try {
-      const response = await fetch("/api/csv-data");
-      if (!response.ok) throw new Error("Failed to fetch data");
-
-      const data = await response.json();
-
       // Check if P&L data exists (Client 2)
       if (!data.pl_client2) {
         setStatus({
           type: "error",
-          message: "No P&L data available. Please contact your administrator to upload data.",
+          message:
+            "No P&L data available. Please contact your administrator to upload data.",
         });
         setProcessing(false);
         return;
@@ -229,10 +245,10 @@ export default function PLDashboard() {
       // Process the fetched P&L data
       await handleProcess(data.pl_client2);
       setDataLoaded(true);
-    } catch (error) {
+    } catch (error: any) {
       setStatus({
         type: "error",
-        message: `Error loading data: ${error.message}`,
+        message: `Error processing data: ${error.message}`,
       });
       setProcessing(false);
     }
@@ -244,7 +260,10 @@ export default function PLDashboard() {
 
     try {
       // rawPlData is already parsed JSON from the server
-      const parsed = { data: rawPlData, meta: { fields: Object.keys(rawPlData[0] || {}) } };
+      const parsed = {
+        data: rawPlData,
+        meta: { fields: Object.keys(rawPlData[0] || {}) },
+      };
 
       const accountColumn = parsed.meta.fields[0];
       const allColumns = parsed.meta.fields;
