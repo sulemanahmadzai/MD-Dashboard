@@ -15,6 +15,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 
 interface UploadStatus {
@@ -28,6 +36,8 @@ interface UploadStatus {
 export default function DataUploadPage() {
   const [uploading, setUploading] = useState(false);
   const [currentUpload, setCurrentUpload] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [pendingDeleteKey, setPendingDeleteKey] = useState<string | null>(null);
   const router = useRouter();
 
   // Use React Query hooks for user and CSV status
@@ -264,10 +274,84 @@ export default function DataUploadPage() {
                   </div>
                 </Button>
               </label>
+              {status[key as keyof UploadStatus] && (
+                <Button
+                  className="mt-3 w-full"
+                  disabled={uploading}
+                  onClick={() => {
+                    setPendingDeleteKey(key);
+                    setDeleteDialogOpen(true);
+                  }}
+                >
+                  Remove CSV
+                </Button>
+              )}
             </CardContent>
           </Card>
         ))}
       </div>
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove CSV</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this CSV file? This action cannot
+              be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteDialogOpen(false);
+                setPendingDeleteKey(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (!pendingDeleteKey) return;
+                try {
+                  const res = await fetch(
+                    `/api/csv-data?fileType=${pendingDeleteKey}`,
+                    {
+                      method: "DELETE",
+                    }
+                  );
+                  if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || "Delete failed");
+                  }
+                  clearCache("csv-data");
+                  clearCache("csv-status");
+                  if (pendingDeleteKey === "pl_client2") {
+                    clearCache("csv-data-client2");
+                  }
+                  refetchStatus();
+                  toast.success("File removed", {
+                    description: `${getFileLabel(
+                      pendingDeleteKey
+                    )} has been removed.`,
+                  });
+                } catch (err: unknown) {
+                  toast.error("Delete failed", {
+                    description:
+                      err instanceof Error ? err.message : "Unexpected error",
+                  });
+                } finally {
+                  setDeleteDialogOpen(false);
+                  setPendingDeleteKey(null);
+                }
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

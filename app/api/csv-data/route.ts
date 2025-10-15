@@ -77,11 +77,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid fileType" }, { status: 400 });
     }
 
-    // Deactivate old uploads of this type
-    await db
-      .update(csvUploads)
-      .set({ isActive: false })
-      .where(eq(csvUploads.fileType, fileType));
+    // Remove ALL previous uploads of this type (hard delete)
+    await db.delete(csvUploads).where(eq(csvUploads.fileType, fileType));
 
     // Insert new upload
     const [newUpload] = await db
@@ -105,6 +102,52 @@ export async function POST(request: NextRequest) {
     console.error("Error uploading CSV data:", error);
     return NextResponse.json(
       { error: "Failed to upload data" },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE - Remove CSV data for a given fileType (admin only)
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== "admin") {
+      return NextResponse.json(
+        { error: "Only admins can delete data" },
+        { status: 403 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const fileType = searchParams.get("fileType");
+
+    if (
+      !fileType ||
+      ![
+        "shopify",
+        "tiktok",
+        "subscription",
+        "pl_client1",
+        "pl_client2",
+      ].includes(fileType)
+    ) {
+      return NextResponse.json(
+        { error: "Invalid or missing fileType" },
+        { status: 400 }
+      );
+    }
+
+    // Hard-delete all uploads for this file type
+    await db.delete(csvUploads).where(eq(csvUploads.fileType, fileType));
+
+    return NextResponse.json({
+      message: "Data deleted successfully",
+      fileType,
+    });
+  } catch (error) {
+    console.error("Error deleting CSV data:", error);
+    return NextResponse.json(
+      { error: "Failed to delete data" },
       { status: 500 }
     );
   }
