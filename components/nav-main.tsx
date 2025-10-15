@@ -1,6 +1,16 @@
 "use client";
 
 import { ChevronRight, type LucideIcon } from "lucide-react";
+import {
+  Users as LucideUsers,
+  Settings2 as LucideSettings2,
+  Database as LucideDatabase,
+} from "lucide-react";
+import {
+  IconDashboard,
+  IconListDetails,
+  IconChartBar,
+} from "@tabler/icons-react";
 import { usePathname } from "next/navigation";
 import type { ComponentType } from "react";
 
@@ -21,13 +31,23 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 
+// Map string identifiers to icon components on the client
+const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+  dashboard: IconDashboard,
+  data: LucideDatabase,
+  client1: IconListDetails,
+  client2: IconChartBar,
+  users: LucideUsers,
+  settings: LucideSettings2,
+};
+
 export function NavMain({
   items,
 }: {
   items: {
     title: string;
     url: string;
-    icon: LucideIcon | ComponentType<{ className?: string }>;
+    icon: string | LucideIcon | ComponentType<{ className?: string }>;
     isActive?: boolean;
     items?: {
       title: string;
@@ -52,7 +72,14 @@ export function NavMain({
                   isActive={isActive}
                 >
                   <a href={item.url}>
-                    <item.icon />
+                    {typeof item.icon === "string" ? (
+                      (() => {
+                        const IconComp = iconMap[item.icon] ?? IconDashboard;
+                        return <IconComp />;
+                      })()
+                    ) : (
+                      <item.icon />
+                    )}
                     <span>{item.title}</span>
                   </a>
                 </SidebarMenuButton>

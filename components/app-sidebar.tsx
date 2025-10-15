@@ -3,11 +3,8 @@ import { Command, Settings2, Users, Database } from "lucide-react";
 
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
-import {
-  IconChartBar,
-  IconDashboard,
-  IconListDetails,
-} from "@tabler/icons-react";
+// Note: Icon components should not be passed across the server boundary.
+// We'll pass string identifiers and map to icons in the client NavMain.
 
 import {
   Sidebar,
@@ -23,31 +20,31 @@ const navMain = [
   {
     title: "Dashboard",
     url: "/",
-    icon: IconDashboard,
+    icon: "dashboard",
     isActive: true,
   },
   {
     title: "Data",
     url: "/data",
-    icon: Database,
+    icon: "data",
     isActive: true,
   },
   {
     title: "Client 1",
     url: "/client1",
-    icon: IconListDetails,
+    icon: "client1",
     isActive: true,
   },
   {
     title: "Client 2",
     url: "/client2",
-    icon: IconChartBar,
+    icon: "client2",
     isActive: true,
   },
   {
     title: "User Management",
     url: "/users",
-    icon: Users,
+    icon: "users",
     isActive: true,
     items: [
       {
@@ -63,7 +60,7 @@ const navMain = [
   {
     title: "Settings",
     url: "/account",
-    icon: Settings2,
+    icon: "settings",
     items: [
       {
         title: "Account",
