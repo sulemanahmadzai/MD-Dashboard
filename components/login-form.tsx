@@ -138,7 +138,7 @@ export function LoginForm({
                     type="email"
                     inputMode="email"
                     autoComplete="email"
-                    placeholder="you@domain.com"
+                    placeholder="example@gmail.com"
                     required
                     className="h-11 w-full pl-9"
                     aria-label="Email address"
@@ -151,12 +151,6 @@ export function LoginForm({
                 <FieldLabel htmlFor="password" className="text-foreground">
                   Password
                 </FieldLabel>
-                <a
-                  href="#"
-                  className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-                >
-                  Forgot your password?
-                </a>
               </div>
 
               {/* Password */}
@@ -171,6 +165,7 @@ export function LoginForm({
                     required
                     className="h-11 w-full pl-9 pr-10"
                     aria-label="Password"
+                    placeholder="********"
                   />
                   <button
                     type="button"
@@ -207,16 +202,6 @@ export function LoginForm({
                     </span>
                   )}
                 </Button>
-
-                <FieldDescription className="text-center">
-                  Don&apos;t have an account?{" "}
-                  <a
-                    href="#"
-                    className="font-medium underline-offset-4 hover:underline"
-                  >
-                    Sign up
-                  </a>
-                </FieldDescription>
               </Field>
             </FieldGroup>
           </form>
