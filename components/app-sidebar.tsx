@@ -1,26 +1,12 @@
-"use client";
-
 import type * as React from "react";
 import { Command, Settings2, Users } from "lucide-react";
 
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
 import {
-  IconCamera,
   IconChartBar,
   IconDashboard,
-  IconDatabase,
-  IconFileAi,
-  IconFileDescription,
-  IconFileWord,
-  IconFolder,
-  IconHelp,
-  IconInnerShadowTop,
   IconListDetails,
-  IconReport,
-  IconSearch,
-  IconSettings,
-  IconUsers,
 } from "@tabler/icons-react";
 
 import {
@@ -83,12 +69,27 @@ const navMain = [
 
 export function AppSidebar({
   user,
+  isLoading = false,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
-  user: { name: string; email: string; avatar?: string; role?: string };
+  user?: { name: string; email: string; avatar?: string; role?: string };
+  isLoading?: boolean;
 }) {
+  // Use placeholder for display purposes only (name/email)
+  const displayUser = user ?? {
+    name: "Loading…",
+    email: "",
+    avatar: undefined,
+  };
+
   // Filter navigation items based on user role
+  // IMPORTANT: Don't show any items while loading to prevent wrong permissions flash
   const getFilteredNavItems = () => {
+    // If loading or no user data, show nothing
+    if (isLoading || !user || !user.role) {
+      return [];
+    }
+
     if (user.role === "admin") {
       // Admin sees everything
       return navMain;
@@ -121,8 +122,7 @@ export function AppSidebar({
                   <Command className="size-4" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">Acme Inc</span>
-                  <span className="truncate text-xs">Enterprise</span>
+                  <span className="truncate font-medium">MD Dashboard</span>
                 </div>
               </a>
             </SidebarMenuButton>
@@ -133,7 +133,7 @@ export function AppSidebar({
         <NavMain items={getFilteredNavItems()} />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={user} />
+        <NavUser user={displayUser} />
       </SidebarFooter>
     </Sidebar>
   );

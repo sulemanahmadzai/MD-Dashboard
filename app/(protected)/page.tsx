@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Upload, CheckCircle, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { useCSVStatus } from "@/lib/hooks/use-csv-data";
+import { useUser } from "@/lib/hooks/use-user";
 import { clearCache } from "@/lib/cache";
 
 interface UploadStatus {
@@ -16,12 +17,12 @@ interface UploadStatus {
 }
 
 export default function DashboardPage() {
-  const [session, setSession] = useState<any>(null);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
   const router = useRouter();
 
-  // Use React Query hook for CSV status (lightweight, cached)
+  // Use React Query hooks for user and CSV status
+  const { data: session, isLoading: isLoadingUser } = useUser();
   const { data: uploadStatus, refetch: refetchStatus } = useCSVStatus();
 
   // Default status while loading
@@ -34,20 +35,11 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    // Fetch session to verify admin access
-    fetch("/api/auth/me")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.role !== "admin") {
-          router.push("/unauthorized");
-        }
-        setSession(data);
-      })
-      .catch((err) => {
-        console.error("Session fetch error:", err);
-        router.push("/login");
-      });
-  }, []);
+    // Redirect if not admin
+    if (!isLoadingUser && session && session.role !== "admin") {
+      router.push("/unauthorized");
+    }
+  }, [session, isLoadingUser, router]);
 
   const handleFileUpload = async (event: any, fileType: string) => {
     const file = event.target.files[0];

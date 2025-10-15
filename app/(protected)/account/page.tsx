@@ -25,6 +25,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { useUser } from "@/lib/hooks/use-user";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface UserData {
   id: string;
@@ -38,8 +40,8 @@ interface UserData {
 
 export default function AccountPage() {
   const router = useRouter();
-  const [userData, setUserData] = useState<UserData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data: userData, isLoading: loading } = useUser();
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{
     type: "success" | "error";
@@ -58,33 +60,24 @@ export default function AccountPage() {
   });
 
   useEffect(() => {
-    fetchUserData();
-  }, []);
-
-  const fetchUserData = async () => {
-    try {
-      const response = await fetch("/api/auth/me");
-      const data = await response.json();
-
-      if (data && !data.error) {
-        setUserData(data);
-        setFormData({
-          name: data.name || "",
-          email: data.email || "",
-          currentPassword: "",
-          newPassword: "",
-          confirmPassword: "",
-          gender: data.gender || "",
-          phone: data.phone || "",
-          address: data.address || "",
-        });
-      }
-    } catch (error) {
-      console.error("Failed to fetch user data:", error);
-    } finally {
-      setLoading(false);
+    if (userData) {
+      setFormData({
+        name: userData.name || "",
+        email: userData.email || "",
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+        gender: (userData.gender ?? "") as
+          | ""
+          | "male"
+          | "female"
+          | "other"
+          | "prefer_not_to_say",
+        phone: userData.phone ?? "",
+        address: userData.address ?? "",
+      });
     }
-  };
+  }, [userData]);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,11 +133,8 @@ export default function AccountPage() {
           confirmPassword: "",
         }));
 
-        // Refresh user data
-        await fetchUserData();
-
-        // Refresh the router to update session
-        router.refresh();
+        // Invalidate user session cache to refetch
+        await queryClient.invalidateQueries({ queryKey: ["user-session"] });
       } else {
         const error = await response.json();
         toast.error("Failed to update profile", {
