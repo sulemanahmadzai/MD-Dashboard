@@ -269,7 +269,7 @@ export default function UsersPage() {
           </div>
 
           {loading ? (
-            <div className="text-center py-8">Loading...</div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
           ) : (
             <div className="rounded-md border">
               <Table>
