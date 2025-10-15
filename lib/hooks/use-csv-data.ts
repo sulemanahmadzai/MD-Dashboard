@@ -109,3 +109,41 @@ export function useCSVFileData(fileType: keyof CSVData) {
     refetchOnWindowFocus: false,
   });
 }
+
+/**
+ * Hook to fetch ONLY client2 P&L data (separate endpoint)
+ * Uses dedicated endpoint for better caching (small payload)
+ */
+export function useClient2Data() {
+  return useQuery<{ pl_client2: any[] | null }>({
+    queryKey: ["csv-data-client2"],
+    queryFn: async () => {
+      // Try to get from localStorage cache first
+      const cached = getCachedData<{ pl_client2: any[] | null }>(
+        "csv-data-client2"
+      );
+      if (cached) {
+        console.log("📦 Using cached Client2 data from localStorage");
+        return cached;
+      }
+
+      // Fetch from dedicated client2 endpoint
+      console.log("🌐 Fetching Client2 data from API...");
+      const response = await fetch("/api/csv-data/client2");
+      if (!response.ok) {
+        throw new Error("Failed to fetch client2 data");
+      }
+
+      const data = await response.json();
+
+      // Cache in localStorage (small payload, should work!)
+      setCachedData("csv-data-client2", data);
+
+      return data;
+    },
+    staleTime: 10 * 60 * 1000, // 10 minutes (increased for client2)
+    gcTime: 30 * 60 * 1000, // 30 minutes
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+  });
+}

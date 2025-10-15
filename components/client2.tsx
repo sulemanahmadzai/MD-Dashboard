@@ -26,7 +26,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { useCSVData } from "@/lib/hooks/use-csv-data";
+import { useClient2Data } from "@/lib/hooks/use-csv-data";
 
 export default function PLDashboard() {
   const [activeTab, setActiveTab] = useState("pl");
@@ -202,8 +202,8 @@ export default function PLDashboard() {
     "Financing Cost",
   ];
 
-  // Use React Query hook for cached data
-  const { data: csvData, isLoading, error } = useCSVData();
+  // Use React Query hook for cached data (dedicated client2 endpoint)
+  const { data: csvData, isLoading, error } = useClient2Data();
 
   // Auto-process data when it's available
   useEffect(() => {

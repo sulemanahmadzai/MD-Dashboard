@@ -80,6 +80,12 @@ export default function DashboardPage() {
       // Clear cache and refetch status
       clearCache("csv-data");
       clearCache("csv-status");
+
+      // Clear client2 dedicated cache if client2 data was uploaded
+      if (fileType === "pl_client2") {
+        clearCache("csv-data-client2");
+      }
+
       refetchStatus();
 
       toast.success("CSV uploaded successfully!", {
