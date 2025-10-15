@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { csvUploads } from "@/lib/db/schema";
 import { getSession } from "@/lib/auth";
 import { eq, and, desc } from "drizzle-orm";
 
 // GET - Fetch only client2 P&L data
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const session = await getSession();
     if (!session) {

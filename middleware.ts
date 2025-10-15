@@ -5,6 +5,7 @@ import { getSession } from "./lib/auth";
 // Routes that require authentication (protected routes)
 const protectedRoutes = [
   "/",
+  "/data",
   "/client1",
   "/client2",
   "/users",
@@ -17,12 +18,13 @@ const protectedRoutes = [
 const authRoutes = ["/login", "/signup"];
 
 // Admin-only routes
-const adminOnlyRoutes = ["/users"];
+const adminOnlyRoutes = ["/", "/data", "/users"];
 
 // Role-specific allowed routes
 const roleRoutes: Record<string, string[]> = {
   admin: [
     "/",
+    "/data",
     "/users",
     "/client1",
     "/client2",

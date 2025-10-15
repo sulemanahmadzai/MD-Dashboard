@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+import { revalidateTag } from "next/cache";
 
 // GET single user
 export async function GET(
@@ -80,6 +81,10 @@ export async function PATCH(
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    // Invalidate caches
+    revalidateTag("users");
+    revalidateTag("dashboard");
+
     return NextResponse.json(updatedUser[0]);
   } catch (error) {
     console.error("Error updating user:", error);
@@ -105,6 +110,10 @@ export async function DELETE(
     if (deletedUser.length === 0) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
+
+    // Invalidate caches
+    revalidateTag("users");
+    revalidateTag("dashboard");
 
     return NextResponse.json({ message: "User deleted successfully" });
   } catch (error) {

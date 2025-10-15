@@ -2,11 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { roles, insertRoleSchema } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { unstable_cache, revalidateTag } from "next/cache";
+
+// Cached function to fetch all roles
+const getCachedRoles = unstable_cache(
+  async () => {
+    const allRoles = await db.select().from(roles);
+    return allRoles;
+  },
+  ["all-roles"],
+  {
+    revalidate: 120, // Cache for 2 minutes
+    tags: ["roles"],
+  }
+);
 
 // GET all roles
 export async function GET() {
   try {
-    const allRoles = await db.select().from(roles);
+    const allRoles = await getCachedRoles();
     return NextResponse.json(allRoles);
   } catch (error) {
     console.error("Error fetching roles:", error);
@@ -41,6 +55,9 @@ export async function POST(request: NextRequest) {
 
     // Create role
     const newRole = await db.insert(roles).values(validatedData).returning();
+
+    // Invalidate roles cache
+    revalidateTag("roles");
 
     return NextResponse.json(newRole[0], { status: 201 });
   } catch (error) {

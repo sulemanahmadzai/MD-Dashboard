@@ -3,10 +3,11 @@ import { db } from "@/lib/db";
 import { users, insertUserSchema } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+import { unstable_cache, revalidateTag } from "next/cache";
 
-// GET all users
-export async function GET() {
-  try {
+// Cached function to fetch all users
+const getCachedUsers = unstable_cache(
+  async () => {
     const allUsers = await db
       .select({
         id: users.id,
@@ -21,7 +22,19 @@ export async function GET() {
         updatedAt: users.updatedAt,
       })
       .from(users);
+    return allUsers;
+  },
+  ["all-users"],
+  {
+    revalidate: 60, // Cache for 60 seconds
+    tags: ["users"],
+  }
+);
 
+// GET all users
+export async function GET() {
+  try {
+    const allUsers = await getCachedUsers();
     return NextResponse.json(allUsers);
   } catch (error) {
     console.error("Error fetching users:", error);
@@ -76,6 +89,10 @@ export async function POST(request: NextRequest) {
         createdAt: users.createdAt,
         updatedAt: users.updatedAt,
       });
+
+    // Invalidate users cache
+    revalidateTag("users");
+    revalidateTag("dashboard");
 
     return NextResponse.json(newUser[0], { status: 201 });
   } catch (error) {

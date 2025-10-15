@@ -32,9 +32,10 @@ export function useUser() {
 
       return data as SessionUser;
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 2 * 60 * 1000, // 2 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
     refetchOnWindowFocus: false,
+    refetchOnMount: false, // Use cached session (faster)
     retry: false, // Don't retry on 401
   });
 }

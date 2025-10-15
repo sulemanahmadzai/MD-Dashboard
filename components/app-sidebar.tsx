@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { Command, Settings2, Users } from "lucide-react";
+import { Command, Settings2, Users, Database } from "lucide-react";
 
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
@@ -24,6 +24,12 @@ const navMain = [
     title: "Dashboard",
     url: "/",
     icon: IconDashboard,
+    isActive: true,
+  },
+  {
+    title: "Data",
+    url: "/data",
+    icon: Database,
     isActive: true,
   },
   {
@@ -94,12 +100,12 @@ export function AppSidebar({
       // Admin sees everything
       return navMain;
     } else if (user.role === "client1") {
-      // Client1 sees only Client 1 and Settings
+      // Client1 sees only Client 1 and Settings (no Dashboard, no Data)
       return navMain.filter(
         (item) => item.title === "Client 1" || item.title === "Settings"
       );
     } else if (user.role === "client2") {
-      // Client2 sees only Client 2 and Settings
+      // Client2 sees only Client 2 and Settings (no Dashboard, no Data)
       return navMain.filter(
         (item) => item.title === "Client 2" || item.title === "Settings"
       );

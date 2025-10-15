@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { roles } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { revalidateTag } from "next/cache";
 
 // GET single role
 export async function GET(
@@ -48,6 +49,9 @@ export async function PATCH(
       return NextResponse.json({ error: "Role not found" }, { status: 404 });
     }
 
+    // Invalidate roles cache
+    revalidateTag("roles");
+
     return NextResponse.json(updatedRole[0]);
   } catch (error) {
     console.error("Error updating role:", error);
@@ -73,6 +77,9 @@ export async function DELETE(
     if (deletedRole.length === 0) {
       return NextResponse.json({ error: "Role not found" }, { status: 404 });
     }
+
+    // Invalidate roles cache
+    revalidateTag("roles");
 
     return NextResponse.json({ message: "Role deleted successfully" });
   } catch (error) {
