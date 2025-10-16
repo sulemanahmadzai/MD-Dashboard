@@ -26,6 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useUser } from "@/lib/hooks/use-user";
+import { useUserProfile } from "@/lib/hooks/use-user-profile";
 import { useQueryClient } from "@tanstack/react-query";
 
 interface UserData {
@@ -41,7 +42,10 @@ interface UserData {
 export default function AccountPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { data: userData, isLoading: loading } = useUser();
+  const { data: session, isLoading: loadingSession } = useUser();
+  const { data: userData, isLoading: loadingProfile } = useUserProfile(
+    session?.id
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{
     type: "success" | "error";
@@ -152,7 +156,7 @@ export default function AccountPage() {
     }
   };
 
-  if (loading) {
+  if (loadingSession || loadingProfile) {
     return (
       <div className="flex flex-1 flex-col gap-4 p-6">
         <div className="flex items-center justify-center h-96">

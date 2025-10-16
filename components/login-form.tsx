@@ -94,7 +94,7 @@ export function LoginForm({
       {...props}
     >
       <Card className="rounded-2xl border border-border/60 shadow-lg">
-        <CardHeader className="space-y-1">
+        <CardHeader className="space-y-1 text-center">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <svg viewBox="0 0 24 24" className="h-4 w-4">
@@ -106,10 +106,10 @@ export function LoginForm({
             </span>
             <span>Welcome back</span>
           </div>
-          <CardTitle className="text-2xl leading-tight">
+          <CardTitle className="text-2xl leading-tight text-center">
             Login to your account
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-center">
             Enter your credentials to continue. Your session is protected with
             secure authentication.
           </CardDescription>
