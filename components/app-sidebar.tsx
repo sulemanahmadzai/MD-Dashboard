@@ -1,6 +1,6 @@
 import type * as React from "react";
 import { Command, Settings2, Users, Database } from "lucide-react";
-
+import Image from "next/image";
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
 // Note: Icon components should not be passed across the server boundary.
@@ -120,12 +120,12 @@ export function AppSidebar({
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <a href="#">
-                <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                  <Command className="size-4" />
+              <a href="/">
+                <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg overflow-hidden">
+                  <Image src="/logo.png" alt="Logo" width={32} height={32} />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">MD Dashboard</span>
+                  <span className="truncate font-medium">Bearded Gorilla</span>
                 </div>
               </a>
             </SidebarMenuButton>

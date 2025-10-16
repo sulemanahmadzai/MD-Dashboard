@@ -95,16 +95,15 @@ export function LoginForm({
     >
       <Card className="rounded-2xl border border-border/60 shadow-lg">
         <CardHeader className="space-y-1 text-center">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <svg viewBox="0 0 24 24" className="h-4 w-4">
-                <path
-                  d="M12 3l7 4v10l-7 4-7-4V7l7-4z"
-                  className="fill-current"
-                />
-              </svg>
-            </span>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground justify-center">
             <span>Welcome back</span>
+          </div>
+          <div className="flex items-center justify-center py-2">
+            <img
+              src="/logo.png"
+              alt="Logo"
+              className="h-12 w-12 object-contain"
+            />
           </div>
           <CardTitle className="text-2xl leading-tight text-center">
             Login to your account
