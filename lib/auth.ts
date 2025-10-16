@@ -10,7 +10,7 @@ export interface SessionUser {
   id: string;
   email: string;
   name: string;
-  role: "admin" | "client1" | "client2";
+  role: string;
 }
 
 export async function encrypt(payload: SessionUser) {
