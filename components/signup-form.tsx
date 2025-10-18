@@ -58,7 +58,7 @@ export function SignupForm({
                   </Field>
                 </Field>
                 <FieldDescription>
-                  Must be at least 8 characters long.
+                  Enter a password for the account.
                 </FieldDescription>
               </Field>
               <Field>
