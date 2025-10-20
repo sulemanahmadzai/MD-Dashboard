@@ -1772,8 +1772,8 @@ export default function PLDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 sm:p-8 overflow-x-hidden">
+      <div className="max-w-6xl mx-auto">
         <div className="bg-white rounded-2xl shadow-xl p-8 mb-6">
           <div className="flex items-center gap-3 mb-6">
             <FileText className="w-8 h-8 text-indigo-600" />
@@ -2380,7 +2380,7 @@ export default function PLDashboard() {
                           {dashboardData.months.map((month, idx) => (
                             <th
                               key={month.columnName}
-                              className="px-4 py-3 text-right text-sm font-semibold min-w-[120px]"
+                              className="px-4 py-3 text-right text-sm font-semibold min-w-[80px]"
                             >
                               <div>{month.displayName}</div>
                               <div className="text-xs font-normal text-gray-600">
@@ -2388,7 +2388,7 @@ export default function PLDashboard() {
                               </div>
                             </th>
                           ))}
-                          <th className="px-4 py-3 text-right text-sm font-semibold bg-indigo-100 min-w-[120px]">
+                          <th className="px-4 py-3 text-right text-sm font-semibold bg-indigo-100 min-w-[80px]">
                             YTD Total
                           </th>
                           <th className="px-4 py-3 text-right text-sm font-semibold bg-indigo-100 min-w-[80px]">
@@ -7655,17 +7655,11 @@ export default function PLDashboard() {
                         ).sort((a, b) => b[1].total - a[1].total);
 
                         return (
-                          <div style={{ minWidth: "1400px" }}>
+                          <div className="w-full max-w-full">
                             {/* Horizontal Layout */}
-                            <div
-                              className="flex items-center gap-8"
-                              style={{ minHeight: "700px" }}
-                            >
+                            <div className="flex flex-wrap items-center gap-4 lg:gap-8">
                               {/* Column 1: Opening Balance & Inflow Sources */}
-                              <div
-                                className="flex flex-col gap-4"
-                                style={{ width: "200px", flexShrink: 0 }}
-                              >
+                              <div className="flex flex-col gap-4 w-full sm:w-auto sm:min-w-[180px]">
                                 {/* Opening Balance */}
                                 <div className="bg-blue-500 text-white rounded-lg px-4 py-3 shadow-lg">
                                   <div className="text-xs font-semibold">
@@ -7714,14 +7708,14 @@ export default function PLDashboard() {
                               {/* Visual Flow Connector */}
                               <div
                                 className="flex items-center"
-                                style={{ width: "60px", flexShrink: 0 }}
+                                className="w-full sm:w-auto sm:min-w-[50px]"
                               >
                                 <div className="w-full h-1 bg-gradient-to-r from-blue-400 to-indigo-500"></div>
                                 <div className="w-0 h-0 border-t-8 border-b-8 border-l-8 border-transparent border-l-indigo-500"></div>
                               </div>
 
                               {/* Column 2: Total Inflows Hub */}
-                              <div style={{ width: "180px", flexShrink: 0 }}>
+                              <div className="w-full sm:w-auto sm:min-w-[160px]">
                                 <div className="bg-indigo-500 text-white rounded-lg px-6 py-4 shadow-xl">
                                   <div className="text-xs font-semibold">
                                     Total Inflows
@@ -7735,7 +7729,7 @@ export default function PLDashboard() {
                               {/* Visual Flow Connector */}
                               <div
                                 className="flex items-center"
-                                style={{ width: "60px", flexShrink: 0 }}
+                                className="w-full sm:w-auto sm:min-w-[50px]"
                               >
                                 <div className="w-full h-1 bg-gradient-to-r from-indigo-500 to-orange-400"></div>
                                 <div className="w-0 h-0 border-t-8 border-b-8 border-l-8 border-transparent border-l-orange-400"></div>
@@ -7744,7 +7738,7 @@ export default function PLDashboard() {
                               {/* Column 3: Expense Categories */}
                               <div
                                 className="flex flex-col gap-3"
-                                style={{ width: "220px", flexShrink: 0 }}
+                                className="w-full sm:w-auto sm:min-w-[200px]"
                               >
                                 <h3 className="text-sm font-bold text-gray-700">
                                   Expense Categories
@@ -7785,7 +7779,7 @@ export default function PLDashboard() {
                               {/* Visual Flow Connector */}
                               <div
                                 className="flex items-center"
-                                style={{ width: "60px", flexShrink: 0 }}
+                                className="w-full sm:w-auto sm:min-w-[50px]"
                               >
                                 <div className="w-full h-1 bg-gradient-to-r from-green-400 to-purple-400"></div>
                                 <div className="w-0 h-0 border-t-8 border-b-8 border-l-8 border-transparent border-l-purple-400"></div>
@@ -8246,7 +8240,7 @@ export default function PLDashboard() {
                             return (
                               <th
                                 key={key}
-                                className="px-4 py-3 text-center text-sm font-semibold min-w-[140px]"
+                                className="px-4 py-3 text-center text-sm font-semibold min-w-[100px]"
                               >
                                 <div>
                                   {monthName} {year}
