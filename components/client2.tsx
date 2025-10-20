@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 import { useState, useEffect } from "react";
 import {
@@ -31,15 +30,23 @@ import { useClient2Data } from "@/lib/hooks/use-csv-data";
 
 export default function PLDashboard() {
   const [activeTab, setActiveTab] = useState("pl");
-  const [processing, setProcessing] = useState(false);
-  const [status, setStatus] = useState(null);
-  const [dashboardData, setDashboardData] = useState(null);
   const [dataLoaded, setDataLoaded] = useState(false);
-  const [unclassifiedItems, setUnclassifiedItems] = useState([]);
+  const [processing, setProcessing] = useState(false);
+  const [status, setStatus] = useState<{
+    type: string;
+    message: string;
+  } | null>(null);
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [unclassifiedItems, setUnclassifiedItems] = useState<
+    { name: string; category: string }[]
+  >([]);
   const [showClassificationModal, setShowClassificationModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [dealToDelete, setDealToDelete] = useState(null);
   const [headcount, setHeadcount] = useState(0);
+
+  // Use React Query hook for cached data (dedicated client2 endpoint)
+  const { data: csvData, isLoading, error } = useClient2Data();
 
   // Projects state
   const [projects, setProjects] = useState([]);
@@ -85,7 +92,7 @@ export default function PLDashboard() {
   });
 
   // Cashflow state
-  const [cashTransactions, setCashTransactions] = useState([]);
+  const [cashTransactions, setCashTransactions] = useState<any[]>([]);
   const [showCashModal, setShowCashModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [openingBalance, setOpeningBalance] = useState(0);
@@ -98,6 +105,32 @@ export default function PLDashboard() {
   });
   const [showCategoryBreakdown, setShowCategoryBreakdown] = useState(false);
   const [selectedMonthBreakdown, setSelectedMonthBreakdown] = useState(null);
+
+  // Sankey Diagram / Bank Transactions state - SGD
+  const [bankTransactions, setBankTransactions] = useState<any[]>([]);
+  const [bankTransactionsFile, setBankTransactionsFile] = useState(null);
+  const [processingBankTransactions, setProcessingBankTransactions] =
+    useState(false);
+  const [bankTransactionsStatus, setBankTransactionsStatus] = useState<{
+    type: string;
+    message: string;
+  } | null>(null);
+  const [bankOpeningBalance, setBankOpeningBalance] = useState(0);
+
+  // USD Account state
+  const [usdTransactions, setUsdTransactions] = useState<any[]>([]);
+  const [usdTransactionsFile, setUsdTransactionsFile] = useState(null);
+  const [processingUsdTransactions, setProcessingUsdTransactions] =
+    useState(false);
+  const [usdTransactionsStatus, setUsdTransactionsStatus] = useState<{
+    type: string;
+    message: string;
+  } | null>(null);
+  const [usdOpeningBalance, setUsdOpeningBalance] = useState(0);
+  const [usdOpeningBalanceSGD, setUsdOpeningBalanceSGD] = useState(0);
+
+  // Sankey diagram account selection
+  const [selectedSankeyAccount, setSelectedSankeyAccount] = useState("SGD");
 
   const cashflowCategories = [
     "Sales Revenue",
@@ -130,7 +163,7 @@ export default function PLDashboard() {
   const [showAdjustmentsModal, setShowAdjustmentsModal] = useState(false);
 
   // Pipeline state
-  const [deals, setDeals] = useState([]);
+  const [deals, setDeals] = useState<any[]>([]);
   const [showDealModal, setShowDealModal] = useState(false);
   const [editingDeal, setEditingDeal] = useState(null);
   const [sortColumn, setSortColumn] = useState("clientName");
@@ -203,9 +236,6 @@ export default function PLDashboard() {
     "Financing Cost",
   ];
 
-  // Use React Query hook for cached data (dedicated client2 endpoint)
-  const { data: csvData, isLoading, error } = useClient2Data();
-
   // Auto-process data when it's available
   useEffect(() => {
     if (csvData && !dataLoaded) {
@@ -255,16 +285,19 @@ export default function PLDashboard() {
     }
   };
 
-  const handleProcess = async (rawPlData) => {
+  const handleProcess = async (rawPlData: any) => {
     setProcessing(true);
-    setStatus({ type: "info", message: "Processing P&L data..." });
+    setStatus({ type: "info", message: "Processing..." });
 
     try {
-      // rawPlData is already parsed JSON from the server
-      const parsed = {
-        data: rawPlData,
-        meta: { fields: Object.keys(rawPlData[0] || {}) },
-      };
+      const Papa = await import("papaparse");
+
+      // Convert the raw data to CSV format for processing
+      const csvText = Papa.unparse(rawPlData);
+      const parsed = Papa.parse(csvText, {
+        header: true,
+        skipEmptyLines: true,
+      });
 
       const accountColumn = parsed.meta.fields[0];
       const allColumns = parsed.meta.fields;
@@ -871,6 +904,873 @@ export default function PLDashboard() {
 
   const sortedDeals = getSortedDeals();
 
+  const handleBankTransactionsUpload = (event) => {
+    const file = event.target.files[0];
+    if (file && file.name.toLowerCase().endsWith(".csv")) {
+      setBankTransactionsFile(file);
+      setBankTransactionsStatus(null);
+    } else {
+      setBankTransactionsStatus({
+        type: "error",
+        message: "Please upload a CSV file",
+      });
+    }
+  };
+
+  const handleUsdTransactionsUpload = (event) => {
+    const file = event.target.files[0];
+    if (file && file.name.toLowerCase().endsWith(".csv")) {
+      setUsdTransactionsFile(file);
+      setUsdTransactionsStatus(null);
+    } else {
+      setUsdTransactionsStatus({
+        type: "error",
+        message: "Please upload a CSV file",
+      });
+    }
+  };
+
+  const handleProcessBankTransactions = async () => {
+    if (!bankTransactionsFile) {
+      setBankTransactionsStatus({
+        type: "error",
+        message: "Please upload a bank transactions CSV file",
+      });
+      return;
+    }
+
+    setProcessingBankTransactions(true);
+    setBankTransactionsStatus({ type: "info", message: "Reading CSV file..." });
+
+    try {
+      const Papa = await import("papaparse");
+      const text = await bankTransactionsFile.text();
+
+      setBankTransactionsStatus({
+        type: "info",
+        message: "Parsing CSV data...",
+      });
+
+      const parsed = Papa.parse(text, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header) => header.trim(),
+      });
+
+      console.log("Parsed data:", parsed);
+      console.log("Headers:", parsed.meta.fields);
+      console.log("Row count:", parsed.data.length);
+
+      if (!parsed.data || parsed.data.length === 0) {
+        throw new Error("No data found in CSV file");
+      }
+
+      setBankTransactionsStatus({
+        type: "info",
+        message: "Detecting columns...",
+      });
+
+      // Try to detect columns - common bank statement formats
+      const headers = parsed.meta.fields;
+      console.log("Looking for columns in:", headers);
+
+      // Try to find date column
+      const dateColumn = headers.find((h) => {
+        const lower = h.toLowerCase();
+        return lower.includes("date") || lower.includes("transaction date");
+      });
+
+      // Try to find description column
+      const descColumn = headers.find((h) => {
+        const lower = h.toLowerCase();
+        return (
+          lower.includes("description") ||
+          lower.includes("particulars") ||
+          lower.includes("details") ||
+          lower.includes("narrative")
+        );
+      });
+
+      // Try to find category column
+      const categoryColumn = headers.find((h) => {
+        const lower = h.toLowerCase();
+        return lower.includes("category");
+      });
+
+      // Try to find contact column
+      const contactColumn = headers.find((h) => {
+        const lower = h.toLowerCase();
+        return lower === "contact" || lower.includes("contact");
+      });
+
+      // Try to find amount columns
+      const amountColumn = headers.find((h) => {
+        const lower = h.toLowerCase();
+        return lower.includes("amount") && !lower.includes("balance");
+      });
+
+      // For bank statements: Debit = money IN (inflow), Credit = money OUT (outflow)
+      const debitColumn = headers.find((h) => {
+        const lower = h.toLowerCase();
+        return (
+          lower === "debit" ||
+          (lower.includes("debit") && !lower.includes("sgd"))
+        );
+      });
+
+      const creditColumn = headers.find((h) => {
+        const lower = h.toLowerCase();
+        return (
+          lower === "credit" ||
+          (lower.includes("credit") && !lower.includes("sgd"))
+        );
+      });
+
+      // Find SGD equivalent columns
+      const debitSGDColumn = headers.find((h) => {
+        const lower = h.toLowerCase();
+        return lower.includes("debit") && lower.includes("sgd");
+      });
+
+      const creditSGDColumn = headers.find((h) => {
+        const lower = h.toLowerCase();
+        return lower.includes("credit") && lower.includes("sgd");
+      });
+
+      console.log("Detected columns:", {
+        dateColumn,
+        descColumn,
+        categoryColumn,
+        contactColumn,
+        amountColumn,
+        debitColumn,
+        creditColumn,
+        debitSGDColumn,
+        creditSGDColumn,
+      });
+      console.log(
+        "Note: Using bank statement convention - Debit = Inflow, Credit = Outflow"
+      );
+
+      if (!dateColumn || !descColumn) {
+        throw new Error(
+          `Missing required columns. Found: ${headers.join(
+            ", "
+          )}. Need Date and Description columns.`
+        );
+      }
+
+      if (!categoryColumn) {
+        console.warn(
+          '⚠️ No Category column found. Transactions will be marked as "Uncategorized". Add a Category column for better grouping in the Sankey diagram.'
+        );
+      }
+
+      if (!contactColumn) {
+        console.warn(
+          "⚠️ No Contact column found. Contact names will default to transaction descriptions. Add a Contact column to see detailed payee/recipient breakdown."
+        );
+      }
+
+      if (!amountColumn && !debitColumn && !creditColumn) {
+        throw new Error(
+          "No amount columns found. Need either Amount column or Debit/Credit columns."
+        );
+      }
+
+      setBankTransactionsStatus({
+        type: "info",
+        message: "Processing transactions...",
+      });
+
+      // Row 2 ALWAYS contains opening balance - extract it
+      let extractedOpeningBalance = null;
+      let startIndex = 1; // Always skip Row 2 (first data row)
+
+      if (parsed.data.length > 0) {
+        const firstRow = parsed.data[0]; // This is Row 2 (Row 1 is headers)
+
+        console.log("=== PROCESSING ROW 2 AS OPENING BALANCE ===");
+        console.log("Row 2 full data:", firstRow);
+
+        // Extract the opening balance amount from Row 2
+        // Debit (Source) = Positive balance, Credit (Source) = Negative balance
+        if (debitColumn && creditColumn) {
+          const debitValue = parseFloat(
+            String(firstRow[debitColumn] || "0").replace(/[^0-9.-]/g, "")
+          );
+          const creditValue = parseFloat(
+            String(firstRow[creditColumn] || "0").replace(/[^0-9.-]/g, "")
+          );
+
+          console.log(
+            "Debit (Source) column value:",
+            firstRow[debitColumn],
+            "=> parsed:",
+            debitValue
+          );
+          console.log(
+            "Credit (Source) column value:",
+            firstRow[creditColumn],
+            "=> parsed:",
+            creditValue
+          );
+
+          // If Debit has value = positive balance
+          if (!isNaN(debitValue) && debitValue > 0) {
+            extractedOpeningBalance = debitValue; // Positive balance
+            console.log(
+              "✓ POSITIVE opening balance from Debit (Source):",
+              extractedOpeningBalance
+            );
+          }
+          // If Credit has value = negative balance (overdrawn)
+          else if (!isNaN(creditValue) && creditValue > 0) {
+            extractedOpeningBalance = -creditValue; // Negative balance
+            console.log(
+              "✓ NEGATIVE opening balance from Credit (Source):",
+              extractedOpeningBalance
+            );
+          } else {
+            console.log("✗ No opening balance value found in Row 2");
+          }
+        } else if (amountColumn) {
+          const amountValue = parseFloat(
+            String(firstRow[amountColumn] || "0").replace(/[^0-9.-]/g, "")
+          );
+          console.log(
+            "Amount column value:",
+            firstRow[amountColumn],
+            "=> parsed:",
+            amountValue
+          );
+          if (!isNaN(amountValue) && amountValue !== 0) {
+            extractedOpeningBalance = amountValue;
+            console.log(
+              "✓ Opening balance from Amount column:",
+              extractedOpeningBalance
+            );
+          }
+        }
+
+        console.log("Final opening balance:", extractedOpeningBalance);
+        console.log("===========================================");
+      }
+
+      const transactions = [];
+      let skipped = 0;
+
+      for (let i = startIndex; i < parsed.data.length; i++) {
+        try {
+          const row = parsed.data[i];
+          const dateValue = row[dateColumn];
+          const descValue = row[descColumn];
+          const categoryValue = categoryColumn
+            ? (row[categoryColumn] || "").trim()
+            : "";
+          const contactValue = contactColumn
+            ? (row[contactColumn] || "").trim()
+            : "";
+
+          if (!dateValue || !descValue) {
+            skipped++;
+            continue;
+          }
+
+          // Parse date - handle various formats
+          let parsedDate;
+          try {
+            // Try ISO format first
+            parsedDate = new Date(dateValue);
+            if (isNaN(parsedDate.getTime())) {
+              // Try DD/MM/YYYY format
+              const parts = dateValue.split("/");
+              if (parts.length === 3) {
+                parsedDate = new Date(parts[2], parts[1] - 1, parts[0]);
+              }
+            }
+            if (isNaN(parsedDate.getTime())) {
+              throw new Error("Invalid date");
+            }
+          } catch (e) {
+            console.log(`Skipping row ${i}: invalid date ${dateValue}`);
+            skipped++;
+            continue;
+          }
+
+          const formattedDate = parsedDate.toISOString().split("T")[0];
+
+          // Determine amount and type
+          let amount = 0;
+          let type = "inflow";
+
+          if (debitColumn && creditColumn) {
+            // For BANK STATEMENTS: Debit = Inflow (money IN), Credit = Outflow (money OUT)
+            const debitValue = parseFloat(
+              String(row[debitColumn] || "0").replace(/[^0-9.-]/g, "")
+            );
+            const creditValue = parseFloat(
+              String(row[creditColumn] || "0").replace(/[^0-9.-]/g, "")
+            );
+
+            if (!isNaN(debitValue) && debitValue > 0) {
+              amount = Math.abs(debitValue);
+              type = "inflow"; // Debit = money coming IN
+            } else if (!isNaN(creditValue) && creditValue > 0) {
+              amount = Math.abs(creditValue);
+              type = "outflow"; // Credit = money going OUT
+            } else {
+              skipped++;
+              continue;
+            }
+          } else if (amountColumn) {
+            // Single amount column (positive = credit, negative = debit)
+            const amountValue = parseFloat(
+              String(row[amountColumn] || "0").replace(/[^0-9.-]/g, "")
+            );
+
+            if (isNaN(amountValue) || amountValue === 0) {
+              skipped++;
+              continue;
+            }
+
+            if (amountValue > 0) {
+              amount = amountValue;
+              type = "inflow";
+            } else {
+              amount = Math.abs(amountValue);
+              type = "outflow";
+            }
+          } else {
+            skipped++;
+            continue;
+          }
+
+          transactions.push({
+            id: Date.now() + Math.random(),
+            date: formattedDate,
+            description: String(descValue).trim(),
+            category: categoryValue || "Uncategorized",
+            contact: contactValue || "",
+            type: type,
+            amount: amount.toFixed(2),
+            amountSGD: amount.toFixed(2), // For SGD account, SGD amount is same as amount
+          });
+        } catch (rowError) {
+          console.error(`Error processing row ${i}:`, rowError);
+          skipped++;
+        }
+      }
+
+      console.log(
+        `Processed ${transactions.length} transactions, skipped ${skipped}`
+      );
+
+      if (transactions.length === 0 && !extractedOpeningBalance) {
+        throw new Error("No valid transactions found in CSV");
+      }
+
+      // Set opening balance from Row 2
+      if (extractedOpeningBalance !== null) {
+        setBankOpeningBalance(extractedOpeningBalance);
+      } else {
+        // No balance found in Row 2
+        console.warn(
+          "⚠️ No opening balance value found in Row 2. Please enter manually."
+        );
+      }
+
+      // Set the bank transactions (replace existing)
+      setBankTransactions(transactions);
+
+      let message = `Successfully imported ${transactions.length} transactions!`;
+      if (extractedOpeningBalance !== null) {
+        message += ` Opening balance: ${formatCurrency(
+          extractedOpeningBalance
+        )}.`;
+      } else {
+        message += ` ⚠️ No opening balance found in Row 2 - please enter manually.`;
+      }
+      if (!categoryColumn) {
+        message += ` ⚠️ No Category column found - transactions marked as "Uncategorized".`;
+      }
+      if (!contactColumn) {
+        message += ` ⚠️ No Contact column found - using descriptions for contact names.`;
+      }
+      if (skipped > 0) {
+        message += ` (${skipped} rows skipped)`;
+      }
+
+      setBankTransactionsStatus({
+        type: "success",
+        message: message,
+      });
+      setProcessingBankTransactions(false);
+      setBankTransactionsFile(null);
+    } catch (error) {
+      console.error("Processing error:", error);
+      setProcessingBankTransactions(false);
+      setBankTransactionsStatus({
+        type: "error",
+        message: `Error: ${error.message}. Check browser console for details.`,
+      });
+    }
+  };
+
+  const handleProcessUsdTransactions = async () => {
+    if (!usdTransactionsFile) {
+      setUsdTransactionsStatus({
+        type: "error",
+        message: "Please upload a bank transactions CSV file",
+      });
+      return;
+    }
+
+    setProcessingUsdTransactions(true);
+    setUsdTransactionsStatus({ type: "info", message: "Reading CSV file..." });
+
+    try {
+      const Papa = await import("papaparse");
+      const text = await usdTransactionsFile.text();
+
+      setUsdTransactionsStatus({
+        type: "info",
+        message: "Parsing CSV data...",
+      });
+
+      const parsed = Papa.parse(text, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header) => header.trim(),
+      });
+
+      console.log("Parsed data:", parsed);
+      console.log("Headers:", parsed.meta.fields);
+      console.log("Row count:", parsed.data.length);
+
+      if (!parsed.data || parsed.data.length === 0) {
+        throw new Error("No data found in CSV file");
+      }
+
+      setUsdTransactionsStatus({
+        type: "info",
+        message: "Detecting columns...",
+      });
+
+      const headers = parsed.meta.fields;
+      console.log("Looking for columns in:", headers);
+
+      const dateColumn = headers.find((h) => {
+        const lower = h.toLowerCase();
+        return lower.includes("date") || lower.includes("transaction date");
+      });
+
+      const descColumn = headers.find((h) => {
+        const lower = h.toLowerCase();
+        return (
+          lower.includes("description") ||
+          lower.includes("particulars") ||
+          lower.includes("details") ||
+          lower.includes("narrative")
+        );
+      });
+
+      const categoryColumn = headers.find((h) => {
+        const lower = h.toLowerCase();
+        return lower.includes("category");
+      });
+
+      const contactColumn = headers.find((h) => {
+        const lower = h.toLowerCase();
+        return lower === "contact" || lower.includes("contact");
+      });
+
+      const amountColumn = headers.find((h) => {
+        const lower = h.toLowerCase();
+        return lower.includes("amount") && !lower.includes("balance");
+      });
+
+      const debitColumn = headers.find((h) => {
+        const lower = h.toLowerCase();
+        return (
+          lower === "debit" ||
+          (lower.includes("debit") && !lower.includes("sgd"))
+        );
+      });
+
+      const creditColumn = headers.find((h) => {
+        const lower = h.toLowerCase();
+        return (
+          lower === "credit" ||
+          (lower.includes("credit") && !lower.includes("sgd"))
+        );
+      });
+
+      // Find SGD equivalent columns
+      const debitSGDColumn = headers.find((h) => {
+        const lower = h.toLowerCase();
+        return lower.includes("debit") && lower.includes("sgd");
+      });
+
+      const creditSGDColumn = headers.find((h) => {
+        const lower = h.toLowerCase();
+        return lower.includes("credit") && lower.includes("sgd");
+      });
+
+      console.log("Detected columns:", {
+        dateColumn,
+        descColumn,
+        categoryColumn,
+        contactColumn,
+        amountColumn,
+        debitColumn,
+        creditColumn,
+        debitSGDColumn,
+        creditSGDColumn,
+      });
+      console.log(
+        "Note: Using bank statement convention - Debit = Inflow, Credit = Outflow"
+      );
+
+      if (!dateColumn || !descColumn) {
+        throw new Error(
+          `Missing required columns. Found: ${headers.join(
+            ", "
+          )}. Need Date and Description columns.`
+        );
+      }
+
+      if (!categoryColumn) {
+        console.warn(
+          '⚠️ No Category column found. Transactions will be marked as "Uncategorized". Add a Category column for better grouping in the Sankey diagram.'
+        );
+      }
+
+      if (!contactColumn) {
+        console.warn(
+          "⚠️ No Contact column found. Contact names will default to transaction descriptions. Add a Contact column to see detailed payee/recipient breakdown."
+        );
+      }
+
+      if (!amountColumn && !debitColumn && !creditColumn) {
+        throw new Error(
+          "No amount columns found. Need either Amount column or Debit/Credit columns."
+        );
+      }
+
+      if (!debitSGDColumn || !creditSGDColumn) {
+        console.warn(
+          "⚠️ SGD equivalent columns not found. Combined SGD view will not include accurate conversion rates."
+        );
+      }
+
+      setUsdTransactionsStatus({
+        type: "info",
+        message: "Processing transactions...",
+      });
+
+      let extractedOpeningBalance = null;
+      let extractedOpeningBalanceSGD = null;
+      let startIndex = 1;
+
+      if (parsed.data.length > 0) {
+        const firstRow = parsed.data[0];
+
+        console.log("=== PROCESSING ROW 2 AS OPENING BALANCE ===");
+        console.log("Row 2 full data:", firstRow);
+
+        if (debitColumn && creditColumn) {
+          const debitValue = parseFloat(
+            String(firstRow[debitColumn] || "0").replace(/[^0-9.-]/g, "")
+          );
+          const creditValue = parseFloat(
+            String(firstRow[creditColumn] || "0").replace(/[^0-9.-]/g, "")
+          );
+
+          console.log(
+            "Debit (Source) column value:",
+            firstRow[debitColumn],
+            "=> parsed:",
+            debitValue
+          );
+          console.log(
+            "Credit (Source) column value:",
+            firstRow[creditColumn],
+            "=> parsed:",
+            creditValue
+          );
+
+          if (!isNaN(debitValue) && debitValue > 0) {
+            extractedOpeningBalance = debitValue;
+            console.log(
+              "✓ POSITIVE opening balance from Debit (Source):",
+              extractedOpeningBalance
+            );
+          } else if (!isNaN(creditValue) && creditValue > 0) {
+            extractedOpeningBalance = -creditValue;
+            console.log(
+              "✓ NEGATIVE opening balance from Credit (Source):",
+              extractedOpeningBalance
+            );
+          } else {
+            console.log("✗ No opening balance value found in Row 2");
+          }
+
+          // Also get SGD equivalent
+          if (debitSGDColumn && creditSGDColumn) {
+            const debitSGDValue = parseFloat(
+              String(firstRow[debitSGDColumn] || "0").replace(/[^0-9.-]/g, "")
+            );
+            const creditSGDValue = parseFloat(
+              String(firstRow[creditSGDColumn] || "0").replace(/[^0-9.-]/g, "")
+            );
+
+            console.log(
+              "Debit (SGD) column value:",
+              firstRow[debitSGDColumn],
+              "=> parsed:",
+              debitSGDValue
+            );
+            console.log(
+              "Credit (SGD) column value:",
+              firstRow[creditSGDColumn],
+              "=> parsed:",
+              creditSGDValue
+            );
+
+            if (!isNaN(debitSGDValue) && debitSGDValue > 0) {
+              extractedOpeningBalanceSGD = debitSGDValue;
+              console.log(
+                "✓ POSITIVE SGD opening balance from Debit (SGD):",
+                extractedOpeningBalanceSGD
+              );
+            } else if (!isNaN(creditSGDValue) && creditSGDValue > 0) {
+              extractedOpeningBalanceSGD = -creditSGDValue;
+              console.log(
+                "✓ NEGATIVE SGD opening balance from Credit (SGD):",
+                extractedOpeningBalanceSGD
+              );
+            }
+          }
+        } else if (amountColumn) {
+          const amountValue = parseFloat(
+            String(firstRow[amountColumn] || "0").replace(/[^0-9.-]/g, "")
+          );
+          console.log(
+            "Amount column value:",
+            firstRow[amountColumn],
+            "=> parsed:",
+            amountValue
+          );
+          if (!isNaN(amountValue) && amountValue !== 0) {
+            extractedOpeningBalance = amountValue;
+            console.log(
+              "✓ Opening balance from Amount column:",
+              extractedOpeningBalance
+            );
+          }
+        }
+
+        console.log("Final opening balance (USD):", extractedOpeningBalance);
+        console.log("Final opening balance (SGD):", extractedOpeningBalanceSGD);
+        console.log("===========================================");
+      }
+
+      const transactions = [];
+      let skipped = 0;
+
+      for (let i = startIndex; i < parsed.data.length; i++) {
+        try {
+          const row = parsed.data[i];
+          const dateValue = row[dateColumn];
+          const descValue = row[descColumn];
+          const categoryValue = categoryColumn
+            ? (row[categoryColumn] || "").trim()
+            : "";
+          const contactValue = contactColumn
+            ? (row[contactColumn] || "").trim()
+            : "";
+
+          if (!dateValue || !descValue) {
+            skipped++;
+            continue;
+          }
+
+          let parsedDate;
+          try {
+            parsedDate = new Date(dateValue);
+            if (isNaN(parsedDate.getTime())) {
+              const parts = dateValue.split("/");
+              if (parts.length === 3) {
+                parsedDate = new Date(parts[2], parts[1] - 1, parts[0]);
+              }
+            }
+            if (isNaN(parsedDate.getTime())) {
+              throw new Error("Invalid date");
+            }
+          } catch (e) {
+            console.log(`Skipping row ${i}: invalid date ${dateValue}`);
+            skipped++;
+            continue;
+          }
+
+          const formattedDate = parsedDate.toISOString().split("T")[0];
+
+          let amount = 0;
+          let amountSGD = 0;
+          let type = "inflow";
+
+          if (debitColumn && creditColumn) {
+            const debitValue = parseFloat(
+              String(row[debitColumn] || "0").replace(/[^0-9.-]/g, "")
+            );
+            const creditValue = parseFloat(
+              String(row[creditColumn] || "0").replace(/[^0-9.-]/g, "")
+            );
+
+            // Get SGD equivalents if available
+            const debitSGDValue = debitSGDColumn
+              ? parseFloat(
+                  String(row[debitSGDColumn] || "0").replace(/[^0-9.-]/g, "")
+                )
+              : 0;
+            const creditSGDValue = creditSGDColumn
+              ? parseFloat(
+                  String(row[creditSGDColumn] || "0").replace(/[^0-9.-]/g, "")
+                )
+              : 0;
+
+            if (!isNaN(debitValue) && debitValue > 0) {
+              amount = Math.abs(debitValue);
+              amountSGD = Math.abs(debitSGDValue);
+              type = "inflow";
+            } else if (!isNaN(creditValue) && creditValue > 0) {
+              amount = Math.abs(creditValue);
+              amountSGD = Math.abs(creditSGDValue);
+              type = "outflow";
+            } else {
+              skipped++;
+              continue;
+            }
+          } else if (amountColumn) {
+            const amountValue = parseFloat(
+              String(row[amountColumn] || "0").replace(/[^0-9.-]/g, "")
+            );
+
+            if (isNaN(amountValue) || amountValue === 0) {
+              skipped++;
+              continue;
+            }
+
+            if (amountValue > 0) {
+              amount = amountValue;
+              type = "inflow";
+            } else {
+              amount = Math.abs(amountValue);
+              type = "outflow";
+            }
+
+            // Try to get SGD equivalent
+            if (debitSGDColumn && creditSGDColumn) {
+              const debitSGDValue = parseFloat(
+                String(row[debitSGDColumn] || "0").replace(/[^0-9.-]/g, "")
+              );
+              const creditSGDValue = parseFloat(
+                String(row[creditSGDColumn] || "0").replace(/[^0-9.-]/g, "")
+              );
+              amountSGD =
+                type === "inflow"
+                  ? Math.abs(debitSGDValue)
+                  : Math.abs(creditSGDValue);
+            }
+          } else {
+            skipped++;
+            continue;
+          }
+
+          transactions.push({
+            id: Date.now() + Math.random(),
+            date: formattedDate,
+            description: String(descValue).trim(),
+            category: categoryValue || "Uncategorized",
+            contact: contactValue || "",
+            type: type,
+            amount: amount.toFixed(2),
+            amountSGD: amountSGD.toFixed(2),
+          });
+        } catch (rowError) {
+          console.error(`Error processing row ${i}:`, rowError);
+          skipped++;
+        }
+      }
+
+      console.log(
+        `Processed ${transactions.length} transactions, skipped ${skipped}`
+      );
+
+      if (transactions.length === 0 && !extractedOpeningBalance) {
+        throw new Error("No valid transactions found in CSV");
+      }
+
+      if (extractedOpeningBalance !== null) {
+        setUsdOpeningBalance(extractedOpeningBalance);
+      } else {
+        console.warn(
+          "⚠️ No opening balance value found in Row 2. Please enter manually."
+        );
+      }
+
+      if (extractedOpeningBalanceSGD !== null) {
+        setUsdOpeningBalanceSGD(extractedOpeningBalanceSGD);
+      } else if (
+        extractedOpeningBalance !== null &&
+        debitSGDColumn &&
+        creditSGDColumn
+      ) {
+        console.warn(
+          "⚠️ No SGD opening balance found, but SGD columns exist. Please check data."
+        );
+      }
+
+      setUsdTransactions(transactions);
+
+      let message = `Successfully imported ${transactions.length} transactions!`;
+      if (extractedOpeningBalance !== null) {
+        message += ` Opening balance: ${formatCurrency(
+          extractedOpeningBalance
+        )}.`;
+      } else {
+        message += ` ⚠️ No opening balance found in Row 2 - please enter manually.`;
+      }
+      if (!categoryColumn) {
+        message += ` ⚠️ No Category column found - transactions marked as "Uncategorized".`;
+      }
+      if (!contactColumn) {
+        message += ` ⚠️ No Contact column found - using descriptions for contact names.`;
+      }
+      if (!debitSGDColumn || !creditSGDColumn) {
+        message += ` ⚠️ SGD equivalent columns not found - Combined SGD view may be inaccurate.`;
+      }
+      if (skipped > 0) {
+        message += ` (${skipped} rows skipped)`;
+      }
+
+      setUsdTransactionsStatus({
+        type: "success",
+        message: message,
+      });
+      setProcessingUsdTransactions(false);
+      setUsdTransactionsFile(null);
+    } catch (error) {
+      console.error("Processing error:", error);
+      setProcessingUsdTransactions(false);
+      setUsdTransactionsStatus({
+        type: "error",
+        message: `Error: ${error.message}. Check browser console for details.`,
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-8">
       <div className="max-w-7xl mx-auto">
@@ -944,13 +1844,56 @@ export default function PLDashboard() {
             >
               Project Costs
             </button>
+            <button
+              onClick={() => setActiveTab("sankey")}
+              className={`px-6 py-3 font-semibold transition-colors ${
+                activeTab === "sankey"
+                  ? "text-indigo-600 border-b-2 border-indigo-600"
+                  : "text-gray-600 hover:text-gray-800"
+              }`}
+            >
+              Cashflow Sankey
+            </button>
           </div>
         </div>
 
         {activeTab === "pl" && (
           <>
             <div className="max-w-2xl mx-auto mb-6">
-              <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-gray-200">
+              <div
+                className={`bg-white rounded-xl shadow-lg p-6 border-2 ${
+                  csvData?.pl_client2 ? "border-green-400" : "border-gray-200"
+                }`}
+              >
+                <h3 className="text-lg font-semibold mb-4">P&L Data Status</h3>
+                {csvData?.pl_client2 ? (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+                    <CheckCircle className="w-6 h-6 text-green-600" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-green-800">
+                        P&L Data Available
+                      </p>
+                      <p className="text-xs text-green-600">
+                        Data loaded from server
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-center gap-3">
+                    <AlertCircle className="w-6 h-6 text-yellow-600" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-yellow-800">
+                        No P&L Data Available
+                      </p>
+                      <p className="text-xs text-yellow-600">
+                        Please contact your administrator to upload data
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-gray-200 mt-4">
                 <h3 className="text-lg font-semibold mb-4">Headcount</h3>
                 <input
                   type="number"
@@ -967,10 +1910,10 @@ export default function PLDashboard() {
               <div
                 className={`rounded-lg p-4 mb-6 flex items-center gap-3 ${
                   status.type === "success"
-                    ? "bg-green-50 border border-green-200"
+                    ? "bg-green-50"
                     : status.type === "error"
-                    ? "bg-red-50 border border-red-200"
-                    : "bg-blue-50 border border-blue-200"
+                    ? "bg-red-50"
+                    : "bg-blue-50"
                 }`}
               >
                 {status.type === "success" && (
@@ -986,14 +1929,13 @@ export default function PLDashboard() {
               </div>
             )}
 
-            {!dataLoaded && !status && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6 flex items-center gap-3">
-                <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
-                <p className="text-sm font-medium text-blue-800">
-                  Loading P&L data from server...
-                </p>
-              </div>
-            )}
+            <button
+              onClick={() => csvData && processData(csvData)}
+              disabled={processing || !csvData?.pl_client2}
+              className="w-full bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-300 mb-6"
+            >
+              {processing ? "Processing..." : "Process P&L Data"}
+            </button>
 
             {showClassificationModal && (
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -4175,10 +5117,11 @@ export default function PLDashboard() {
 
               {!dashboardData ? (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
-                  <p className="text-gray-600 mb-2">No data available</p>
+                  <p className="text-gray-600 mb-2">
+                    THIS IS OLD P&L CODE - IGNORE THIS
+                  </p>
                   <p className="text-gray-500 text-sm">
-                    Please upload and process a P&L file first in the P&L
-                    Dashboard tab
+                    This should not be visible
                   </p>
                 </div>
               ) : (
@@ -6197,6 +7140,812 @@ export default function PLDashboard() {
           </>
         )}
 
+        {activeTab === "sankey" && (
+          <>
+            {/* SGD and USD Upload Sections Side by Side */}
+            <div className="grid grid-cols-2 gap-6 mb-6">
+              {/* SGD Upload Section */}
+              <div className="bg-white rounded-2xl shadow-xl p-6">
+                <h2 className="text-2xl font-bold mb-4">SGD</h2>
+                <p className="text-gray-600 mb-2 text-sm">
+                  Upload your bank statement CSV file to visualize cashflow
+                  patterns.
+                  <strong> Row 2 must contain opening balance.</strong>
+                </p>
+                <p className="text-xs text-gray-500 mb-4">
+                  Row 2: Debit (Source) = positive balance | Credit (Source) =
+                  negative balance
+                </p>
+
+                <div>
+                  <div
+                    className={`bg-white rounded-xl shadow-lg p-4 border-2 ${
+                      bankTransactionsFile
+                        ? "border-green-400"
+                        : "border-gray-200"
+                    } mb-4`}
+                  >
+                    {!bankTransactionsFile ? (
+                      <label className="cursor-pointer block">
+                        <input
+                          type="file"
+                          accept=".csv"
+                          onChange={handleBankTransactionsUpload}
+                          className="hidden"
+                        />
+                        <div className="border-2 border-dashed border-indigo-300 rounded-lg p-4 text-center hover:bg-indigo-50">
+                          <Upload className="w-8 h-8 text-indigo-400 mx-auto mb-2" />
+                          <p className="text-xs text-gray-600">Upload CSV</p>
+                          <p className="text-xs text-indigo-600 mt-1 font-semibold">
+                            Debit = Inflow | Credit = Outflow
+                          </p>
+                        </div>
+                      </label>
+                    ) : (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+                        <CheckCircle className="w-6 h-6 text-green-600" />
+                        <p className="text-sm font-medium flex-1">
+                          {bankTransactionsFile.name}
+                        </p>
+                        <button onClick={() => setBankTransactionsFile(null)}>
+                          <X className="w-5 h-5 text-gray-400 hover:text-red-500" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {bankTransactionsStatus && (
+                    <div
+                      className={`rounded-lg p-4 mb-4 flex items-center gap-3 ${
+                        bankTransactionsStatus.type === "success"
+                          ? "bg-green-50"
+                          : bankTransactionsStatus.type === "error"
+                          ? "bg-red-50"
+                          : "bg-blue-50"
+                      }`}
+                    >
+                      {bankTransactionsStatus.type === "success" && (
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                      )}
+                      {bankTransactionsStatus.type === "error" && (
+                        <AlertCircle className="w-5 h-5 text-red-600" />
+                      )}
+                      {bankTransactionsStatus.type === "info" && (
+                        <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
+                      )}
+                      <p className="text-sm font-medium">
+                        {bankTransactionsStatus.message}
+                      </p>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleProcessBankTransactions}
+                    disabled={
+                      processingBankTransactions || !bankTransactionsFile
+                    }
+                    className="w-full bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-300 mb-4 text-sm"
+                  >
+                    {processingBankTransactions
+                      ? "Processing..."
+                      : "Import Transactions"}
+                  </button>
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <h3 className="text-xs font-semibold text-blue-900 mb-2">
+                      💡 CSV Format
+                    </h3>
+                    <ul className="text-xs text-blue-800 space-y-1">
+                      <li>
+                        • <strong>Row 1:</strong> Headers (Date, Description,
+                        Debit, Credit)
+                      </li>
+                      <li>
+                        • <strong>Row 2:</strong> Opening Balance
+                      </li>
+                      <li>
+                        • <strong>Row 3+:</strong> Transactions
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* USD Upload Section */}
+              <div className="bg-white rounded-2xl shadow-xl p-6">
+                <h2 className="text-2xl font-bold mb-4">USD</h2>
+                <p className="text-gray-600 mb-2 text-sm">
+                  Upload your bank statement CSV file to visualize cashflow
+                  patterns.
+                  <strong> Row 2 must contain opening balance.</strong>
+                </p>
+                <p className="text-xs text-gray-500 mb-4">
+                  Row 2: Debit (Source) = positive balance | Credit (Source) =
+                  negative balance
+                </p>
+
+                <div>
+                  <div
+                    className={`bg-white rounded-xl shadow-lg p-4 border-2 ${
+                      usdTransactionsFile
+                        ? "border-green-400"
+                        : "border-gray-200"
+                    } mb-4`}
+                  >
+                    {!usdTransactionsFile ? (
+                      <label className="cursor-pointer block">
+                        <input
+                          type="file"
+                          accept=".csv"
+                          onChange={handleUsdTransactionsUpload}
+                          className="hidden"
+                        />
+                        <div className="border-2 border-dashed border-indigo-300 rounded-lg p-4 text-center hover:bg-indigo-50">
+                          <Upload className="w-8 h-8 text-indigo-400 mx-auto mb-2" />
+                          <p className="text-xs text-gray-600">Upload CSV</p>
+                          <p className="text-xs text-indigo-600 mt-1 font-semibold">
+                            Debit = Inflow | Credit = Outflow
+                          </p>
+                        </div>
+                      </label>
+                    ) : (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+                        <CheckCircle className="w-6 h-6 text-green-600" />
+                        <p className="text-sm font-medium flex-1">
+                          {usdTransactionsFile.name}
+                        </p>
+                        <button onClick={() => setUsdTransactionsFile(null)}>
+                          <X className="w-5 h-5 text-gray-400 hover:text-red-500" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {usdTransactionsStatus && (
+                    <div
+                      className={`rounded-lg p-4 mb-4 flex items-center gap-3 ${
+                        usdTransactionsStatus.type === "success"
+                          ? "bg-green-50"
+                          : usdTransactionsStatus.type === "error"
+                          ? "bg-red-50"
+                          : "bg-blue-50"
+                      }`}
+                    >
+                      {usdTransactionsStatus.type === "success" && (
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                      )}
+                      {usdTransactionsStatus.type === "error" && (
+                        <AlertCircle className="w-5 h-5 text-red-600" />
+                      )}
+                      {usdTransactionsStatus.type === "info" && (
+                        <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
+                      )}
+                      <p className="text-sm font-medium">
+                        {usdTransactionsStatus.message}
+                      </p>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleProcessUsdTransactions}
+                    disabled={processingUsdTransactions || !usdTransactionsFile}
+                    className="w-full bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-300 mb-4 text-sm"
+                  >
+                    {processingUsdTransactions
+                      ? "Processing..."
+                      : "Import Transactions"}
+                  </button>
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <h3 className="text-xs font-semibold text-blue-900 mb-2">
+                      💡 CSV Format
+                    </h3>
+                    <ul className="text-xs text-blue-800 space-y-1">
+                      <li>
+                        • <strong>Row 1:</strong> Headers (Date, Description,
+                        Debit, Credit)
+                      </li>
+                      <li>
+                        • <strong>Row 2:</strong> Opening Balance
+                      </li>
+                      <li>
+                        • <strong>Row 3+:</strong> Transactions
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {usdTransactions.length > 0 && (
+              <>
+                {/* Summary Cards */}
+                <div className="max-w-6xl mx-auto mb-6">
+                  <div className="grid grid-cols-4 gap-3 mb-6">
+                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg shadow p-3 border border-blue-200">
+                      <h3 className="text-xs font-semibold text-blue-700 mb-1">
+                        Opening Balance (USD)
+                      </h3>
+                      <input
+                        type="number"
+                        value={usdOpeningBalance}
+                        onChange={(e) =>
+                          setUsdOpeningBalance(parseFloat(e.target.value) || 0)
+                        }
+                        className="w-full text-xl font-bold text-blue-900 bg-transparent border-b border-blue-300 focus:outline-none focus:border-blue-500 px-1"
+                        placeholder="0.00"
+                      />
+                      <p className="text-xs text-blue-600 mt-1">
+                        Click to edit
+                      </p>
+                    </div>
+                    <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg shadow p-3 border border-green-200">
+                      <h3 className="text-xs font-semibold text-green-700">
+                        Total Inflows
+                      </h3>
+                      <p className="text-xl font-bold text-green-900">
+                        {formatCurrency(
+                          usdTransactions
+                            .filter((t) => t.type === "inflow")
+                            .reduce((sum, t) => sum + parseFloat(t.amount), 0)
+                        )}
+                      </p>
+                    </div>
+                    <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg shadow p-3 border border-red-200">
+                      <h3 className="text-xs font-semibold text-red-700">
+                        Total Outflows
+                      </h3>
+                      <p className="text-xl font-bold text-red-900">
+                        {formatCurrency(
+                          usdTransactions
+                            .filter((t) => t.type === "outflow")
+                            .reduce((sum, t) => sum + parseFloat(t.amount), 0)
+                        )}
+                      </p>
+                    </div>
+                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg shadow p-3 border border-purple-200">
+                      <h3 className="text-xs font-semibold text-purple-700">
+                        Closing Balance
+                      </h3>
+                      <p className="text-xl font-bold text-purple-900">
+                        {formatCurrency(
+                          usdOpeningBalance +
+                            usdTransactions
+                              .filter((t) => t.type === "inflow")
+                              .reduce(
+                                (sum, t) => sum + parseFloat(t.amount),
+                                0
+                              ) -
+                            usdTransactions
+                              .filter((t) => t.type === "outflow")
+                              .reduce((sum, t) => sum + parseFloat(t.amount), 0)
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {bankTransactions.length > 0 && (
+              <>
+                {/* Summary Cards */}
+                <div className="max-w-6xl mx-auto mb-6">
+                  <div className="grid grid-cols-4 gap-3 mb-6">
+                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg shadow p-3 border border-blue-200">
+                      <h3 className="text-xs font-semibold text-blue-700 mb-1">
+                        Opening Balance (SGD)
+                      </h3>
+                      <input
+                        type="number"
+                        value={bankOpeningBalance}
+                        onChange={(e) =>
+                          setBankOpeningBalance(parseFloat(e.target.value) || 0)
+                        }
+                        className="w-full text-xl font-bold text-blue-900 bg-transparent border-b border-blue-300 focus:outline-none focus:border-blue-500 px-1"
+                        placeholder="0.00"
+                      />
+                      <p className="text-xs text-blue-600 mt-1">
+                        Click to edit
+                      </p>
+                    </div>
+                    <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg shadow p-3 border border-green-200">
+                      <h3 className="text-xs font-semibold text-green-700">
+                        Total Inflows
+                      </h3>
+                      <p className="text-xl font-bold text-green-900">
+                        {formatCurrency(
+                          bankTransactions
+                            .filter((t) => t.type === "inflow")
+                            .reduce((sum, t) => sum + parseFloat(t.amount), 0)
+                        )}
+                      </p>
+                    </div>
+                    <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg shadow p-3 border border-red-200">
+                      <h3 className="text-xs font-semibold text-red-700">
+                        Total Outflows
+                      </h3>
+                      <p className="text-xl font-bold text-red-900">
+                        {formatCurrency(
+                          bankTransactions
+                            .filter((t) => t.type === "outflow")
+                            .reduce((sum, t) => sum + parseFloat(t.amount), 0)
+                        )}
+                      </p>
+                    </div>
+                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg shadow p-3 border border-purple-200">
+                      <h3 className="text-xs font-semibold text-purple-700">
+                        Closing Balance
+                      </h3>
+                      <p className="text-xl font-bold text-purple-900">
+                        {formatCurrency(
+                          bankOpeningBalance +
+                            bankTransactions
+                              .filter((t) => t.type === "inflow")
+                              .reduce(
+                                (sum, t) => sum + parseFloat(t.amount),
+                                0
+                              ) -
+                            bankTransactions
+                              .filter((t) => t.type === "outflow")
+                              .reduce((sum, t) => sum + parseFloat(t.amount), 0)
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div className="bg-white rounded-2xl shadow-xl p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold">
+                  {selectedSankeyAccount === "Combined"
+                    ? "Combined view in SGD"
+                    : `${selectedSankeyAccount} Account`}
+                </h2>
+                <div className="flex items-center gap-3">
+                  <label className="text-sm font-semibold text-gray-700">
+                    View Account:
+                  </label>
+                  <select
+                    value={selectedSankeyAccount}
+                    onChange={(e) => setSelectedSankeyAccount(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg font-semibold text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="SGD">SGD Account</option>
+                    <option value="USD">USD Account</option>
+                    <option value="Combined">Combined SGD</option>
+                  </select>
+                </div>
+              </div>
+
+              {(() => {
+                let currentTransactions = [];
+                let currentOpeningBalance = 0;
+
+                if (selectedSankeyAccount === "SGD") {
+                  currentTransactions = bankTransactions;
+                  currentOpeningBalance = bankOpeningBalance;
+                } else if (selectedSankeyAccount === "USD") {
+                  currentTransactions = usdTransactions;
+                  currentOpeningBalance = usdOpeningBalance;
+                } else if (selectedSankeyAccount === "Combined") {
+                  // Combine both SGD and USD transactions
+                  // For SGD transactions, use amount directly
+                  // For USD transactions, use amountSGD
+                  currentTransactions = [
+                    ...bankTransactions.map((t) => ({
+                      ...t,
+                      effectiveAmount: t.amount,
+                      source: "SGD",
+                    })),
+                    ...usdTransactions.map((t) => ({
+                      ...t,
+                      effectiveAmount: t.amountSGD || t.amount,
+                      source: "USD",
+                    })),
+                  ];
+                  // For combined balance, use SGD balance + USD balance in SGD equivalent
+                  currentOpeningBalance =
+                    bankOpeningBalance + usdOpeningBalanceSGD;
+                }
+
+                if (!currentTransactions || currentTransactions.length === 0) {
+                  return (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+                      <p className="text-gray-600 mb-2">
+                        No data available for{" "}
+                        {selectedSankeyAccount === "Combined"
+                          ? "combined"
+                          : selectedSankeyAccount}{" "}
+                        account
+                      </p>
+                      <p className="text-gray-500 text-sm">
+                        Please upload and process bank transactions CSV files
+                        above
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <>
+                    <p className="text-gray-600 mb-6">
+                      This diagram shows how cash flows through your{" "}
+                      {selectedSankeyAccount === "Combined"
+                        ? "combined SGD and USD (in SGD equivalent)"
+                        : selectedSankeyAccount}{" "}
+                      bank account
+                      {selectedSankeyAccount === "Combined" ? "s" : ""}. Inflows
+                      are grouped by category, then flow into a central pool.
+                      Outflows are first grouped by category (like Salary,
+                      Operating Expenses), then branched out to individual
+                      contacts/payees within each category.
+                    </p>
+
+                    <div
+                      className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-8 overflow-x-auto"
+                      style={{ minHeight: "800px" }}
+                    >
+                      {(() => {
+                        // Group transactions by category and contact
+                        const inflowByCategory = {};
+                        const outflowByCategory = {};
+
+                        currentTransactions.forEach((transaction) => {
+                          const type = transaction.type;
+                          const category =
+                            transaction.category || "Uncategorized";
+                          const contact =
+                            transaction.contact || transaction.description;
+                          // Use effectiveAmount for combined view, otherwise use amount
+                          const amount =
+                            parseFloat(
+                              transaction.effectiveAmount || transaction.amount
+                            ) || 0;
+
+                          if (type === "inflow") {
+                            if (!inflowByCategory[category]) {
+                              inflowByCategory[category] = {
+                                total: 0,
+                                items: [],
+                              };
+                            }
+                            inflowByCategory[category].total += amount;
+                            inflowByCategory[category].items.push({
+                              contact,
+                              amount,
+                            });
+                          } else {
+                            if (!outflowByCategory[category]) {
+                              outflowByCategory[category] = {
+                                total: 0,
+                                contacts: {},
+                              };
+                            }
+                            outflowByCategory[category].total += amount;
+
+                            if (
+                              !outflowByCategory[category].contacts[contact]
+                            ) {
+                              outflowByCategory[category].contacts[contact] = 0;
+                            }
+                            outflowByCategory[category].contacts[contact] +=
+                              amount;
+                          }
+                        });
+
+                        const totalInflows = Object.values(
+                          inflowByCategory
+                        ).reduce((sum, cat) => sum + cat.total, 0);
+                        const totalOutflows = Object.values(
+                          outflowByCategory
+                        ).reduce((sum, cat) => sum + cat.total, 0);
+                        const netCashflow = totalInflows - totalOutflows;
+                        const closingBalance =
+                          currentOpeningBalance + netCashflow;
+
+                        // Sort categories by amount
+                        const sortedInflowCategories = Object.entries(
+                          inflowByCategory
+                        ).sort((a, b) => b[1].total - a[1].total);
+                        const sortedOutflowCategories = Object.entries(
+                          outflowByCategory
+                        ).sort((a, b) => b[1].total - a[1].total);
+
+                        return (
+                          <div style={{ minWidth: "1400px" }}>
+                            {/* Horizontal Layout */}
+                            <div
+                              className="flex items-center gap-8"
+                              style={{ minHeight: "700px" }}
+                            >
+                              {/* Column 1: Opening Balance & Inflow Sources */}
+                              <div
+                                className="flex flex-col gap-4"
+                                style={{ width: "200px", flexShrink: 0 }}
+                              >
+                                {/* Opening Balance */}
+                                <div className="bg-blue-500 text-white rounded-lg px-4 py-3 shadow-lg">
+                                  <div className="text-xs font-semibold">
+                                    Opening Balance
+                                  </div>
+                                  <div className="text-xl font-bold">
+                                    {formatCurrency(currentOpeningBalance)}
+                                  </div>
+                                </div>
+
+                                {/* Inflow Sources */}
+                                <div className="space-y-2">
+                                  <h3 className="text-sm font-bold text-gray-700">
+                                    Cash Inflows
+                                  </h3>
+                                  {sortedInflowCategories.map(
+                                    ([category, data]) => {
+                                      const percentage =
+                                        totalInflows > 0
+                                          ? (
+                                              (data.total / totalInflows) *
+                                              100
+                                            ).toFixed(1)
+                                          : 0;
+                                      return (
+                                        <div
+                                          key={category}
+                                          className="bg-blue-100 border-l-4 border-blue-500 rounded px-3 py-2 shadow-sm"
+                                        >
+                                          <div
+                                            className="text-xs font-semibold text-blue-900 truncate"
+                                            title={category}
+                                          >
+                                            {category}
+                                          </div>
+                                          <div className="text-sm font-bold text-blue-900">
+                                            {formatCurrency(data.total)}
+                                          </div>
+                                        </div>
+                                      );
+                                    }
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Visual Flow Connector */}
+                              <div
+                                className="flex items-center"
+                                style={{ width: "60px", flexShrink: 0 }}
+                              >
+                                <div className="w-full h-1 bg-gradient-to-r from-blue-400 to-indigo-500"></div>
+                                <div className="w-0 h-0 border-t-8 border-b-8 border-l-8 border-transparent border-l-indigo-500"></div>
+                              </div>
+
+                              {/* Column 2: Total Inflows Hub */}
+                              <div style={{ width: "180px", flexShrink: 0 }}>
+                                <div className="bg-indigo-500 text-white rounded-lg px-6 py-4 shadow-xl">
+                                  <div className="text-xs font-semibold">
+                                    Total Inflows
+                                  </div>
+                                  <div className="text-2xl font-bold">
+                                    {formatCurrency(totalInflows)}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Visual Flow Connector */}
+                              <div
+                                className="flex items-center"
+                                style={{ width: "60px", flexShrink: 0 }}
+                              >
+                                <div className="w-full h-1 bg-gradient-to-r from-indigo-500 to-orange-400"></div>
+                                <div className="w-0 h-0 border-t-8 border-b-8 border-l-8 border-transparent border-l-orange-400"></div>
+                              </div>
+
+                              {/* Column 3: Expense Categories */}
+                              <div
+                                className="flex flex-col gap-3"
+                                style={{ width: "220px", flexShrink: 0 }}
+                              >
+                                <h3 className="text-sm font-bold text-gray-700">
+                                  Expense Categories
+                                </h3>
+                                {sortedOutflowCategories.map(
+                                  ([category, data]) => {
+                                    const categoryPercentage =
+                                      totalOutflows > 0
+                                        ? (
+                                            (data.total / totalOutflows) *
+                                            100
+                                          ).toFixed(1)
+                                        : 0;
+
+                                    return (
+                                      <div
+                                        key={category}
+                                        className="bg-gradient-to-r from-orange-100 to-green-100 border-l-4 border-orange-500 rounded px-3 py-2 shadow-sm"
+                                      >
+                                        <div
+                                          className="text-xs font-semibold text-gray-900 truncate"
+                                          title={category}
+                                        >
+                                          {category}
+                                        </div>
+                                        <div className="text-sm font-bold text-gray-900">
+                                          {formatCurrency(data.total)}
+                                        </div>
+                                        <div className="text-xs text-gray-600">
+                                          {categoryPercentage}%
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                )}
+                              </div>
+
+                              {/* Visual Flow Connector */}
+                              <div
+                                className="flex items-center"
+                                style={{ width: "60px", flexShrink: 0 }}
+                              >
+                                <div className="w-full h-1 bg-gradient-to-r from-green-400 to-purple-400"></div>
+                                <div className="w-0 h-0 border-t-8 border-b-8 border-l-8 border-transparent border-l-purple-400"></div>
+                              </div>
+
+                              {/* Column 4: Individual Contacts/Payees */}
+                              <div className="flex-1">
+                                <h3 className="text-sm font-bold text-gray-700 mb-3">
+                                  Individual Payees/Recipients
+                                </h3>
+                                <div className="space-y-3">
+                                  {sortedOutflowCategories.map(
+                                    ([category, data]) => {
+                                      const sortedContacts = Object.entries(
+                                        data.contacts
+                                      ).sort((a, b) => b[1] - a[1]);
+
+                                      return (
+                                        <div
+                                          key={category}
+                                          className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm"
+                                        >
+                                          <div className="text-xs font-bold text-gray-700 mb-2 pb-1 border-b border-gray-300">
+                                            {category}
+                                          </div>
+                                          <div className="grid grid-cols-2 gap-2">
+                                            {sortedContacts.map(
+                                              ([contact, amount]) => {
+                                                const categoryTotal =
+                                                  data.total;
+                                                const percentage =
+                                                  categoryTotal > 0
+                                                    ? (
+                                                        (amount /
+                                                          categoryTotal) *
+                                                        100
+                                                      ).toFixed(1)
+                                                    : 0;
+                                                return (
+                                                  <div
+                                                    key={contact}
+                                                    className="bg-purple-50 border border-purple-200 rounded px-2 py-1"
+                                                  >
+                                                    <div
+                                                      className="text-xs font-semibold text-purple-900 truncate"
+                                                      title={contact}
+                                                    >
+                                                      {contact}
+                                                    </div>
+                                                    <div className="text-xs font-bold text-purple-900">
+                                                      {formatCurrency(amount)}
+                                                    </div>
+                                                    <div className="text-xs text-purple-700">
+                                                      {percentage}%
+                                                    </div>
+                                                  </div>
+                                                );
+                                              }
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    }
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Bottom Section: Closing Balance */}
+                            <div className="mt-8 pt-6 border-t-2 border-gray-300">
+                              <div className="flex justify-between items-center">
+                                <div
+                                  className={`${
+                                    closingBalance >= 0
+                                      ? "bg-purple-500"
+                                      : "bg-red-600"
+                                  } text-white rounded-xl px-8 py-4 shadow-xl`}
+                                >
+                                  <div className="text-sm font-semibold">
+                                    Closing Balance
+                                  </div>
+                                  <div className="text-3xl font-bold">
+                                    {formatCurrency(closingBalance)}
+                                  </div>
+                                  <div className="text-xs mt-1">
+                                    {closingBalance >= currentOpeningBalance
+                                      ? "↑"
+                                      : "↓"}{" "}
+                                    {formatCurrency(
+                                      Math.abs(
+                                        closingBalance - currentOpeningBalance
+                                      )
+                                    )}{" "}
+                                    from opening
+                                  </div>
+                                </div>
+
+                                {/* Summary Stats */}
+                                <div className="flex gap-6">
+                                  <div className="text-center">
+                                    <div className="text-xs text-gray-600">
+                                      Total Inflows
+                                    </div>
+                                    <div className="text-xl font-bold text-green-600">
+                                      {formatCurrency(totalInflows)}
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                      {sortedInflowCategories.length} categories
+                                    </div>
+                                  </div>
+                                  <div className="text-center">
+                                    <div className="text-xs text-gray-600">
+                                      Total Outflows
+                                    </div>
+                                    <div className="text-xl font-bold text-red-600">
+                                      {formatCurrency(totalOutflows)}
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                      {sortedOutflowCategories.length}{" "}
+                                      categories
+                                    </div>
+                                  </div>
+                                  <div className="text-center">
+                                    <div className="text-xs text-gray-600">
+                                      Net Change
+                                    </div>
+                                    <div
+                                      className={`text-xl font-bold ${
+                                        netCashflow >= 0
+                                          ? "text-green-600"
+                                          : "text-red-600"
+                                      }`}
+                                    >
+                                      {netCashflow >= 0 ? "+" : ""}
+                                      {formatCurrency(netCashflow)}
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                      {currentOpeningBalance > 0
+                                        ? `${(
+                                            (netCashflow /
+                                              currentOpeningBalance) *
+                                            100
+                                          ).toFixed(1)}%`
+                                        : "N/A"}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </>
+        )}
+
         {activeTab === "cashflow" && (
           <>
             <div className="max-w-6xl mx-auto mb-6">
@@ -6252,258 +8001,208 @@ export default function PLDashboard() {
               </div>
             </div>
 
-            {/* Monthly Cashflow Chart */}
-            {cashTransactions.length > 0 && (
-              <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-                <h2 className="text-2xl font-bold mb-6">Monthly Cashflow</h2>
+            <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+              <h2 className="text-2xl font-bold mb-4">Set Opening Balance</h2>
+              <div className="max-w-md">
+                <input
+                  type="number"
+                  value={openingBalance}
+                  onChange={(e) =>
+                    setOpeningBalance(parseFloat(e.target.value) || 0)
+                  }
+                  placeholder="Enter opening balance"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+            <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+              <h2 className="text-2xl font-bold mb-6">Monthly Cashflow</h2>
 
-                <div className="space-y-4">
-                  {(() => {
-                    // Group transactions by month
-                    const monthlyData = {};
+              <div className="space-y-4">
+                {(() => {
+                  // Group transactions by month
+                  const monthlyData = {};
 
-                    cashTransactions.forEach((transaction) => {
-                      const date = new Date(transaction.date);
-                      const monthKey = `${date.getFullYear()}-${String(
-                        date.getMonth() + 1
-                      ).padStart(2, "0")}`;
+                  cashTransactions.forEach((transaction) => {
+                    const date = new Date(transaction.date);
+                    const monthKey = `${date.getFullYear()}-${String(
+                      date.getMonth() + 1
+                    ).padStart(2, "0")}`;
 
-                      if (!monthlyData[monthKey]) {
-                        monthlyData[monthKey] = { inflow: 0, outflow: 0 };
-                      }
+                    if (!monthlyData[monthKey]) {
+                      monthlyData[monthKey] = { inflow: 0, outflow: 0 };
+                    }
 
-                      const amount = parseFloat(transaction.amount) || 0;
-                      if (transaction.type === "inflow") {
-                        monthlyData[monthKey].inflow += amount;
-                      } else {
-                        monthlyData[monthKey].outflow += amount;
-                      }
+                    const amount = parseFloat(transaction.amount) || 0;
+                    if (transaction.type === "inflow") {
+                      monthlyData[monthKey].inflow += amount;
+                    } else {
+                      monthlyData[monthKey].outflow += amount;
+                    }
+                  });
+
+                  // Convert to sorted array with running balance
+                  let runningBalance = openingBalance;
+                  const sortedMonths = Object.keys(monthlyData)
+                    .sort()
+                    .map((key) => {
+                      const [year, month] = key.split("-");
+                      const monthNames = [
+                        "Jan",
+                        "Feb",
+                        "Mar",
+                        "Apr",
+                        "May",
+                        "Jun",
+                        "Jul",
+                        "Aug",
+                        "Sep",
+                        "Oct",
+                        "Nov",
+                        "Dec",
+                      ];
+                      const monthName = monthNames[parseInt(month) - 1];
+
+                      const openingBal = runningBalance;
+                      const inflow = monthlyData[key].inflow;
+                      const outflow = monthlyData[key].outflow;
+                      const closingBal = openingBal + inflow - outflow;
+                      runningBalance = closingBal; // Carry forward to next month
+
+                      return {
+                        key,
+                        label: `${monthName} ${year}`,
+                        opening: openingBal,
+                        inflow,
+                        outflow,
+                        closing: closingBal,
+                        net: inflow - outflow,
+                      };
                     });
 
-                    // Convert to sorted array with running balance
-                    let runningBalance = openingBalance;
-                    const sortedMonths = Object.keys(monthlyData)
-                      .sort()
-                      .map((key) => {
-                        const [year, month] = key.split("-");
-                        const monthNames = [
-                          "Jan",
-                          "Feb",
-                          "Mar",
-                          "Apr",
-                          "May",
-                          "Jun",
-                          "Jul",
-                          "Aug",
-                          "Sep",
-                          "Oct",
-                          "Nov",
-                          "Dec",
-                        ];
-                        const monthName = monthNames[parseInt(month) - 1];
+                  // Find max value for scaling
+                  const maxValue = Math.max(
+                    ...sortedMonths.map((m) => Math.max(m.inflow, m.outflow))
+                  );
 
-                        const openingBal = runningBalance;
-                        const inflow = monthlyData[key].inflow;
-                        const outflow = monthlyData[key].outflow;
-                        const closingBal = openingBal + inflow - outflow;
-                        runningBalance = closingBal; // Carry forward to next month
-
-                        return {
-                          key,
-                          label: `${monthName} ${year}`,
-                          opening: openingBal,
-                          inflow,
-                          outflow,
-                          closing: closingBal,
-                          net: inflow - outflow,
-                        };
-                      });
-
-                    // Find max value for scaling
-                    const maxValue = Math.max(
-                      ...sortedMonths.map((m) => Math.max(m.inflow, m.outflow))
-                    );
-
-                    return sortedMonths.map((monthData) => (
-                      <div key={monthData.key} className="mb-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-gray-700 w-24">
-                            {monthData.label}
+                  return sortedMonths.map((monthData) => (
+                    <div key={monthData.key} className="mb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-semibold text-gray-700 w-24">
+                          {monthData.label}
+                        </span>
+                        <div className="flex gap-3 text-xs text-gray-600">
+                          <span className="text-blue-600">
+                            Open: {formatCurrency(monthData.opening)}
                           </span>
-                          <div className="flex gap-3 text-xs text-gray-600">
-                            <span className="text-blue-600">
-                              Open: {formatCurrency(monthData.opening)}
-                            </span>
-                            <span className="text-green-600">
-                              In: {formatCurrency(monthData.inflow)}
-                            </span>
-                            <span className="text-red-600">
-                              Out: {formatCurrency(monthData.outflow)}
-                            </span>
-                            <span
-                              className={`font-semibold ${
-                                monthData.closing >= 0
-                                  ? "text-green-700"
-                                  : "text-red-700"
-                              }`}
-                            >
-                              Close: {formatCurrency(monthData.closing)}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="relative h-16 bg-gray-100 rounded-lg overflow-hidden">
-                          {/* Center line for zero */}
-                          <div className="absolute left-0 right-0 h-px bg-gray-400 top-1/2 z-10"></div>
-
-                          {/* Inflow bar (top half) */}
-                          <div
-                            className="absolute left-0 bottom-1/2 bg-green-400 transition-all duration-500 flex items-end justify-center pb-1 cursor-pointer hover:bg-green-500"
-                            style={{
-                              width: `${
-                                maxValue > 0
-                                  ? (monthData.inflow / maxValue) * 100
-                                  : 0
-                              }%`,
-                              height: "50%",
-                            }}
-                            onClick={() => {
-                              setSelectedMonthBreakdown({
-                                month: monthData.label,
-                                monthKey: monthData.key,
-                                type: "inflow",
-                              });
-                              setShowCategoryBreakdown(true);
-                            }}
-                            title="Click to see inflow breakdown"
+                          <span className="text-green-600">
+                            In: {formatCurrency(monthData.inflow)}
+                          </span>
+                          <span className="text-red-600">
+                            Out: {formatCurrency(monthData.outflow)}
+                          </span>
+                          <span
+                            className={`font-semibold ${
+                              monthData.closing >= 0
+                                ? "text-green-700"
+                                : "text-red-700"
+                            }`}
                           >
-                            {monthData.inflow > 0 && (
-                              <span className="text-xs font-semibold text-green-900">
-                                {formatCurrency(monthData.inflow)}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Outflow bar (bottom half) */}
-                          <div
-                            className="absolute left-0 top-1/2 bg-red-400 transition-all duration-500 flex items-start justify-center pt-1 cursor-pointer hover:bg-red-500"
-                            style={{
-                              width: `${
-                                maxValue > 0
-                                  ? (monthData.outflow / maxValue) * 100
-                                  : 0
-                              }%`,
-                              height: "50%",
-                            }}
-                            onClick={() => {
-                              setSelectedMonthBreakdown({
-                                month: monthData.label,
-                                monthKey: monthData.key,
-                                type: "outflow",
-                              });
-                              setShowCategoryBreakdown(true);
-                            }}
-                            title="Click to see outflow breakdown"
-                          >
-                            {monthData.outflow > 0 && (
-                              <span className="text-xs font-semibold text-red-900">
-                                {formatCurrency(monthData.outflow)}
-                              </span>
-                            )}
-                          </div>
+                            Close: {formatCurrency(monthData.closing)}
+                          </span>
                         </div>
                       </div>
-                    ));
-                  })()}
-                </div>
 
-                {/* Legend */}
-                <div className="mt-6 flex justify-center gap-6 text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-green-400 rounded"></div>
-                    <span className="text-gray-700">Cash Inflow</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-red-400 rounded"></div>
-                    <span className="text-gray-700">Cash Outflow</span>
-                  </div>
-                </div>
+                      <div className="relative h-16 bg-gray-100 rounded-lg overflow-hidden">
+                        {/* Center line for zero */}
+                        <div className="absolute left-0 right-0 h-px bg-gray-400 top-1/2 z-10"></div>
 
-                {/* Monthly Summary Table */}
-                <div className="mt-8">
-                  <h3 className="text-xl font-bold mb-4">
-                    Monthly Summary by Description
-                  </h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr className="bg-gray-100 border-b">
-                          <th className="px-4 py-3 text-left text-sm font-semibold sticky left-0 bg-gray-100 z-10">
-                            Description
-                          </th>
-                          {(() => {
-                            const monthlyData = {};
-
-                            cashTransactions.forEach((transaction) => {
-                              const date = new Date(transaction.date);
-                              const monthKey = `${date.getFullYear()}-${String(
-                                date.getMonth() + 1
-                              ).padStart(2, "0")}`;
-
-                              if (!monthlyData[monthKey]) {
-                                monthlyData[monthKey] = {
-                                  inflow: 0,
-                                  outflow: 0,
-                                };
-                              }
-
-                              const amount =
-                                parseFloat(transaction.amount) || 0;
-                              if (transaction.type === "inflow") {
-                                monthlyData[monthKey].inflow += amount;
-                              } else {
-                                monthlyData[monthKey].outflow += amount;
-                              }
+                        {/* Inflow bar (top half) */}
+                        <div
+                          className="absolute left-0 bottom-1/2 bg-green-400 transition-all duration-500 flex items-end justify-center pb-1 cursor-pointer hover:bg-green-500"
+                          style={{
+                            width: `${
+                              maxValue > 0
+                                ? (monthData.inflow / maxValue) * 100
+                                : 0
+                            }%`,
+                            height: "50%",
+                          }}
+                          onClick={() => {
+                            setSelectedMonthBreakdown({
+                              month: monthData.label,
+                              monthKey: monthData.key,
+                              type: "inflow",
                             });
+                            setShowCategoryBreakdown(true);
+                          }}
+                          title="Click to see inflow breakdown"
+                        >
+                          {monthData.inflow > 0 && (
+                            <span className="text-xs font-semibold text-green-900">
+                              {formatCurrency(monthData.inflow)}
+                            </span>
+                          )}
+                        </div>
 
-                            const sortedMonths =
-                              Object.keys(monthlyData).sort();
-
-                            return sortedMonths.map((key) => {
-                              const [year, month] = key.split("-");
-                              const monthNames = [
-                                "Jan",
-                                "Feb",
-                                "Mar",
-                                "Apr",
-                                "May",
-                                "Jun",
-                                "Jul",
-                                "Aug",
-                                "Sep",
-                                "Oct",
-                                "Nov",
-                                "Dec",
-                              ];
-                              const monthName = monthNames[parseInt(month) - 1];
-
-                              return (
-                                <th
-                                  key={key}
-                                  className="px-4 py-3 text-center text-sm font-semibold min-w-[140px]"
-                                >
-                                  <div>
-                                    {monthName} {year}
-                                  </div>
-                                </th>
-                              );
+                        {/* Outflow bar (bottom half) */}
+                        <div
+                          className="absolute left-0 top-1/2 bg-red-400 transition-all duration-500 flex items-start justify-center pt-1 cursor-pointer hover:bg-red-500"
+                          style={{
+                            width: `${
+                              maxValue > 0
+                                ? (monthData.outflow / maxValue) * 100
+                                : 0
+                            }%`,
+                            height: "50%",
+                          }}
+                          onClick={() => {
+                            setSelectedMonthBreakdown({
+                              month: monthData.label,
+                              monthKey: monthData.key,
+                              type: "outflow",
                             });
-                          })()}
-                        </tr>
-                      </thead>
-                      <tbody>
+                            setShowCategoryBreakdown(true);
+                          }}
+                          title="Click to see outflow breakdown"
+                        >
+                          {monthData.outflow > 0 && (
+                            <span className="text-xs font-semibold text-red-900">
+                              {formatCurrency(monthData.outflow)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+
+              {/* Legend */}
+              <div className="mt-6 flex justify-center gap-6 text-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-green-400 rounded"></div>
+                  <span className="text-gray-700">Cash Inflow</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-red-400 rounded"></div>
+                  <span className="text-gray-700">Cash Outflow</span>
+                </div>
+              </div>
+
+              {/* Monthly Summary Table */}
+              <div className="mt-8">
+                <h3 className="text-xl font-bold mb-4">
+                  Monthly Summary by Description
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-gray-100 border-b">
+                        <th className="px-4 py-3 text-left text-sm font-semibold sticky left-0 bg-gray-100 z-10">
+                          Description
+                        </th>
                         {(() => {
-                          // Get all months
                           const monthlyData = {};
 
                           cashTransactions.forEach((transaction) => {
@@ -6513,261 +8212,133 @@ export default function PLDashboard() {
                             ).padStart(2, "0")}`;
 
                             if (!monthlyData[monthKey]) {
-                              monthlyData[monthKey] = {};
-                            }
-
-                            const description = transaction.description;
-                            const type = transaction.type;
-
-                            if (!monthlyData[monthKey][description]) {
-                              monthlyData[monthKey][description] = {
-                                inflow: 0,
-                                outflow: 0,
-                              };
+                              monthlyData[monthKey] = { inflow: 0, outflow: 0 };
                             }
 
                             const amount = parseFloat(transaction.amount) || 0;
-                            if (type === "inflow") {
-                              monthlyData[monthKey][description].inflow +=
-                                amount;
+                            if (transaction.type === "inflow") {
+                              monthlyData[monthKey].inflow += amount;
                             } else {
-                              monthlyData[monthKey][description].outflow +=
-                                amount;
+                              monthlyData[monthKey].outflow += amount;
                             }
                           });
 
                           const sortedMonths = Object.keys(monthlyData).sort();
 
-                          // Get all unique descriptions
-                          const allDescriptions = new Set();
-                          Object.values(monthlyData).forEach((monthData) => {
-                            Object.keys(monthData).forEach((desc) =>
-                              allDescriptions.add(desc)
+                          return sortedMonths.map((key) => {
+                            const [year, month] = key.split("-");
+                            const monthNames = [
+                              "Jan",
+                              "Feb",
+                              "Mar",
+                              "Apr",
+                              "May",
+                              "Jun",
+                              "Jul",
+                              "Aug",
+                              "Sep",
+                              "Oct",
+                              "Nov",
+                              "Dec",
+                            ];
+                            const monthName = monthNames[parseInt(month) - 1];
+
+                            return (
+                              <th
+                                key={key}
+                                className="px-4 py-3 text-center text-sm font-semibold min-w-[140px]"
+                              >
+                                <div>
+                                  {monthName} {year}
+                                </div>
+                              </th>
                             );
                           });
+                        })()}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        // Get all months
+                        const monthlyData = {};
 
-                          const descriptionArray =
-                            Array.from(allDescriptions).sort();
+                        cashTransactions.forEach((transaction) => {
+                          const date = new Date(transaction.date);
+                          const monthKey = `${date.getFullYear()}-${String(
+                            date.getMonth() + 1
+                          ).padStart(2, "0")}`;
 
-                          // Separate inflow and outflow descriptions
-                          const inflowDescriptions = descriptionArray.filter(
-                            (desc) => {
-                              return sortedMonths.some(
-                                (month) =>
-                                  monthlyData[month][desc] &&
-                                  monthlyData[month][desc].inflow > 0
-                              );
-                            }
+                          if (!monthlyData[monthKey]) {
+                            monthlyData[monthKey] = {};
+                          }
+
+                          const description = transaction.description;
+                          const type = transaction.type;
+
+                          if (!monthlyData[monthKey][description]) {
+                            monthlyData[monthKey][description] = {
+                              inflow: 0,
+                              outflow: 0,
+                            };
+                          }
+
+                          const amount = parseFloat(transaction.amount) || 0;
+                          if (type === "inflow") {
+                            monthlyData[monthKey][description].inflow += amount;
+                          } else {
+                            monthlyData[monthKey][description].outflow +=
+                              amount;
+                          }
+                        });
+
+                        const sortedMonths = Object.keys(monthlyData).sort();
+
+                        // Get all unique descriptions
+                        const allDescriptions = new Set();
+                        Object.values(monthlyData).forEach((monthData) => {
+                          Object.keys(monthData).forEach((desc) =>
+                            allDescriptions.add(desc)
                           );
+                        });
 
-                          const outflowDescriptions = descriptionArray.filter(
-                            (desc) => {
-                              return sortedMonths.some(
-                                (month) =>
-                                  monthlyData[month][desc] &&
-                                  monthlyData[month][desc].outflow > 0
-                              );
-                            }
-                          );
+                        const descriptionArray =
+                          Array.from(allDescriptions).sort();
 
-                          return (
-                            <>
-                              {/* Opening Balance Row */}
-                              <tr className="bg-blue-50 font-bold border-t-2 border-blue-500">
-                                <td className="px-4 py-3 text-sm sticky left-0 bg-blue-50 z-10">
-                                  Opening Balance
-                                </td>
-                                {(() => {
-                                  let runningBalance = openingBalance;
+                        // Separate inflow and outflow descriptions
+                        const inflowDescriptions = descriptionArray.filter(
+                          (desc) => {
+                            return sortedMonths.some(
+                              (month) =>
+                                monthlyData[month][desc] &&
+                                monthlyData[month][desc].inflow > 0
+                            );
+                          }
+                        );
 
-                                  return sortedMonths.map((month) => {
-                                    const monthOpening = runningBalance;
+                        const outflowDescriptions = descriptionArray.filter(
+                          (desc) => {
+                            return sortedMonths.some(
+                              (month) =>
+                                monthlyData[month][desc] &&
+                                monthlyData[month][desc].outflow > 0
+                            );
+                          }
+                        );
 
-                                    // Calculate this month's net to get closing
-                                    const inflow = Object.keys(
-                                      monthlyData[month] || {}
-                                    ).reduce((sum, desc) => {
-                                      return (
-                                        sum +
-                                        (monthlyData[month][desc]?.inflow || 0)
-                                      );
-                                    }, 0);
-                                    const outflow = Object.keys(
-                                      monthlyData[month] || {}
-                                    ).reduce((sum, desc) => {
-                                      return (
-                                        sum +
-                                        (monthlyData[month][desc]?.outflow || 0)
-                                      );
-                                    }, 0);
+                        return (
+                          <>
+                            {/* Opening Balance Row */}
+                            <tr className="bg-blue-50 font-bold border-t-2 border-blue-500">
+                              <td className="px-4 py-3 text-sm sticky left-0 bg-blue-50 z-10">
+                                Opening Balance
+                              </td>
+                              {(() => {
+                                let runningBalance = openingBalance;
 
-                                    runningBalance =
-                                      monthOpening + inflow - outflow;
+                                return sortedMonths.map((month) => {
+                                  const monthOpening = runningBalance;
 
-                                    return (
-                                      <td
-                                        key={month}
-                                        className="px-4 py-3 text-right text-sm"
-                                      >
-                                        <span className="text-blue-700">
-                                          {formatCurrency(monthOpening)}
-                                        </span>
-                                      </td>
-                                    );
-                                  });
-                                })()}
-                              </tr>
-
-                              {/* Inflows Section */}
-                              <tr className="bg-green-50 font-bold border-t-2 border-green-500">
-                                <td
-                                  className="px-4 py-3 text-sm sticky left-0 bg-green-50 z-10"
-                                  colSpan={sortedMonths.length + 1}
-                                >
-                                  CASH INFLOWS
-                                </td>
-                              </tr>
-
-                              {inflowDescriptions.map((description) => {
-                                return (
-                                  <tr
-                                    key={`in-${description}`}
-                                    className="border-b hover:bg-gray-50"
-                                  >
-                                    <td className="px-4 py-3 text-sm pl-8 sticky left-0 bg-white z-10">
-                                      {description}
-                                    </td>
-                                    {sortedMonths.map((month) => {
-                                      const amount =
-                                        monthlyData[month][description]
-                                          ?.inflow || 0;
-
-                                      return (
-                                        <td
-                                          key={month}
-                                          className="px-4 py-3 text-right text-sm"
-                                        >
-                                          {amount > 0 ? (
-                                            <span className="text-green-600 font-medium">
-                                              {formatCurrency(amount)}
-                                            </span>
-                                          ) : (
-                                            <span className="text-gray-300">
-                                              -
-                                            </span>
-                                          )}
-                                        </td>
-                                      );
-                                    })}
-                                  </tr>
-                                );
-                              })}
-
-                              <tr className="bg-green-100 font-bold border-b-2">
-                                <td className="px-4 py-3 text-sm sticky left-0 bg-green-100 z-10">
-                                  Total Inflows
-                                </td>
-                                {sortedMonths.map((month) => {
-                                  const total = Object.keys(
-                                    monthlyData[month] || {}
-                                  ).reduce((sum, desc) => {
-                                    return (
-                                      sum +
-                                      (monthlyData[month][desc]?.inflow || 0)
-                                    );
-                                  }, 0);
-
-                                  return (
-                                    <td
-                                      key={month}
-                                      className="px-4 py-3 text-right text-sm"
-                                    >
-                                      <span className="text-green-700">
-                                        {formatCurrency(total)}
-                                      </span>
-                                    </td>
-                                  );
-                                })}
-                              </tr>
-
-                              {/* Outflows Section */}
-                              <tr className="bg-red-50 font-bold border-t-2 border-red-500">
-                                <td
-                                  className="px-4 py-3 text-sm sticky left-0 bg-red-50 z-10"
-                                  colSpan={sortedMonths.length + 1}
-                                >
-                                  CASH OUTFLOWS
-                                </td>
-                              </tr>
-
-                              {outflowDescriptions.map((description) => {
-                                return (
-                                  <tr
-                                    key={`out-${description}`}
-                                    className="border-b hover:bg-gray-50"
-                                  >
-                                    <td className="px-4 py-3 text-sm pl-8 sticky left-0 bg-white z-10">
-                                      {description}
-                                    </td>
-                                    {sortedMonths.map((month) => {
-                                      const amount =
-                                        monthlyData[month][description]
-                                          ?.outflow || 0;
-
-                                      return (
-                                        <td
-                                          key={month}
-                                          className="px-4 py-3 text-right text-sm"
-                                        >
-                                          {amount > 0 ? (
-                                            <span className="text-red-600 font-medium">
-                                              {formatCurrency(amount)}
-                                            </span>
-                                          ) : (
-                                            <span className="text-gray-300">
-                                              -
-                                            </span>
-                                          )}
-                                        </td>
-                                      );
-                                    })}
-                                  </tr>
-                                );
-                              })}
-
-                              <tr className="bg-red-100 font-bold border-b-2">
-                                <td className="px-4 py-3 text-sm sticky left-0 bg-red-100 z-10">
-                                  Total Outflows
-                                </td>
-                                {sortedMonths.map((month) => {
-                                  const total = Object.keys(
-                                    monthlyData[month] || {}
-                                  ).reduce((sum, desc) => {
-                                    return (
-                                      sum +
-                                      (monthlyData[month][desc]?.outflow || 0)
-                                    );
-                                  }, 0);
-
-                                  return (
-                                    <td
-                                      key={month}
-                                      className="px-4 py-3 text-right text-sm"
-                                    >
-                                      <span className="text-red-700">
-                                        {formatCurrency(total)}
-                                      </span>
-                                    </td>
-                                  );
-                                })}
-                              </tr>
-
-                              {/* Net Cashflow */}
-                              <tr className="bg-purple-100 font-bold border-t-2 border-purple-500">
-                                <td className="px-4 py-3 text-sm sticky left-0 bg-purple-100 z-10">
-                                  Net Cashflow
-                                </td>
-                                {sortedMonths.map((month) => {
+                                  // Calculate this month's net to get closing
                                   const inflow = Object.keys(
                                     monthlyData[month] || {}
                                   ).reduce((sum, desc) => {
@@ -6784,7 +8355,239 @@ export default function PLDashboard() {
                                       (monthlyData[month][desc]?.outflow || 0)
                                     );
                                   }, 0);
-                                  const net = inflow - outflow;
+
+                                  runningBalance =
+                                    monthOpening + inflow - outflow;
+
+                                  return (
+                                    <td
+                                      key={month}
+                                      className="px-4 py-3 text-right text-sm"
+                                    >
+                                      <span className="text-blue-700">
+                                        {formatCurrency(monthOpening)}
+                                      </span>
+                                    </td>
+                                  );
+                                });
+                              })()}
+                            </tr>
+
+                            {/* Inflows Section */}
+                            <tr className="bg-green-50 font-bold border-t-2 border-green-500">
+                              <td
+                                className="px-4 py-3 text-sm sticky left-0 bg-green-50 z-10"
+                                colSpan={sortedMonths.length + 1}
+                              >
+                                CASH INFLOWS
+                              </td>
+                            </tr>
+
+                            {inflowDescriptions.map((description) => {
+                              return (
+                                <tr
+                                  key={`in-${description}`}
+                                  className="border-b hover:bg-gray-50"
+                                >
+                                  <td className="px-4 py-3 text-sm pl-8 sticky left-0 bg-white z-10">
+                                    {description}
+                                  </td>
+                                  {sortedMonths.map((month) => {
+                                    const amount =
+                                      monthlyData[month][description]?.inflow ||
+                                      0;
+
+                                    return (
+                                      <td
+                                        key={month}
+                                        className="px-4 py-3 text-right text-sm"
+                                      >
+                                        {amount > 0 ? (
+                                          <span className="text-green-600 font-medium">
+                                            {formatCurrency(amount)}
+                                          </span>
+                                        ) : (
+                                          <span className="text-gray-300">
+                                            -
+                                          </span>
+                                        )}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              );
+                            })}
+
+                            <tr className="bg-green-100 font-bold border-b-2">
+                              <td className="px-4 py-3 text-sm sticky left-0 bg-green-100 z-10">
+                                Total Inflows
+                              </td>
+                              {sortedMonths.map((month) => {
+                                const total = Object.keys(
+                                  monthlyData[month] || {}
+                                ).reduce((sum, desc) => {
+                                  return (
+                                    sum +
+                                    (monthlyData[month][desc]?.inflow || 0)
+                                  );
+                                }, 0);
+
+                                return (
+                                  <td
+                                    key={month}
+                                    className="px-4 py-3 text-right text-sm"
+                                  >
+                                    <span className="text-green-700">
+                                      {formatCurrency(total)}
+                                    </span>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+
+                            {/* Outflows Section */}
+                            <tr className="bg-red-50 font-bold border-t-2 border-red-500">
+                              <td
+                                className="px-4 py-3 text-sm sticky left-0 bg-red-50 z-10"
+                                colSpan={sortedMonths.length + 1}
+                              >
+                                CASH OUTFLOWS
+                              </td>
+                            </tr>
+
+                            {outflowDescriptions.map((description) => {
+                              return (
+                                <tr
+                                  key={`out-${description}`}
+                                  className="border-b hover:bg-gray-50"
+                                >
+                                  <td className="px-4 py-3 text-sm pl-8 sticky left-0 bg-white z-10">
+                                    {description}
+                                  </td>
+                                  {sortedMonths.map((month) => {
+                                    const amount =
+                                      monthlyData[month][description]
+                                        ?.outflow || 0;
+
+                                    return (
+                                      <td
+                                        key={month}
+                                        className="px-4 py-3 text-right text-sm"
+                                      >
+                                        {amount > 0 ? (
+                                          <span className="text-red-600 font-medium">
+                                            {formatCurrency(amount)}
+                                          </span>
+                                        ) : (
+                                          <span className="text-gray-300">
+                                            -
+                                          </span>
+                                        )}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              );
+                            })}
+
+                            <tr className="bg-red-100 font-bold border-b-2">
+                              <td className="px-4 py-3 text-sm sticky left-0 bg-red-100 z-10">
+                                Total Outflows
+                              </td>
+                              {sortedMonths.map((month) => {
+                                const total = Object.keys(
+                                  monthlyData[month] || {}
+                                ).reduce((sum, desc) => {
+                                  return (
+                                    sum +
+                                    (monthlyData[month][desc]?.outflow || 0)
+                                  );
+                                }, 0);
+
+                                return (
+                                  <td
+                                    key={month}
+                                    className="px-4 py-3 text-right text-sm"
+                                  >
+                                    <span className="text-red-700">
+                                      {formatCurrency(total)}
+                                    </span>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+
+                            {/* Net Cashflow */}
+                            <tr className="bg-purple-100 font-bold border-t-2 border-purple-500">
+                              <td className="px-4 py-3 text-sm sticky left-0 bg-purple-100 z-10">
+                                Net Cashflow
+                              </td>
+                              {sortedMonths.map((month) => {
+                                const inflow = Object.keys(
+                                  monthlyData[month] || {}
+                                ).reduce((sum, desc) => {
+                                  return (
+                                    sum +
+                                    (monthlyData[month][desc]?.inflow || 0)
+                                  );
+                                }, 0);
+                                const outflow = Object.keys(
+                                  monthlyData[month] || {}
+                                ).reduce((sum, desc) => {
+                                  return (
+                                    sum +
+                                    (monthlyData[month][desc]?.outflow || 0)
+                                  );
+                                }, 0);
+                                const net = inflow - outflow;
+
+                                return (
+                                  <td
+                                    key={month}
+                                    className="px-4 py-3 text-right text-sm"
+                                  >
+                                    <span
+                                      className={
+                                        net >= 0
+                                          ? "text-green-700"
+                                          : "text-red-700"
+                                      }
+                                    >
+                                      {formatCurrency(net)}
+                                    </span>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+
+                            {/* Closing Balance Row */}
+                            <tr className="bg-blue-100 font-bold border-t-4 border-blue-500">
+                              <td className="px-4 py-3 text-sm sticky left-0 bg-blue-100 z-10">
+                                Closing Balance
+                              </td>
+                              {(() => {
+                                let runningBalance = openingBalance;
+
+                                return sortedMonths.map((month) => {
+                                  const inflow = Object.keys(
+                                    monthlyData[month] || {}
+                                  ).reduce((sum, desc) => {
+                                    return (
+                                      sum +
+                                      (monthlyData[month][desc]?.inflow || 0)
+                                    );
+                                  }, 0);
+                                  const outflow = Object.keys(
+                                    monthlyData[month] || {}
+                                  ).reduce((sum, desc) => {
+                                    return (
+                                      sum +
+                                      (monthlyData[month][desc]?.outflow || 0)
+                                    );
+                                  }, 0);
+
+                                  runningBalance =
+                                    runningBalance + inflow - outflow;
 
                                   return (
                                     <td
@@ -6793,75 +8596,26 @@ export default function PLDashboard() {
                                     >
                                       <span
                                         className={
-                                          net >= 0
-                                            ? "text-green-700"
+                                          runningBalance >= 0
+                                            ? "text-blue-700"
                                             : "text-red-700"
                                         }
                                       >
-                                        {formatCurrency(net)}
+                                        {formatCurrency(runningBalance)}
                                       </span>
                                     </td>
                                   );
-                                })}
-                              </tr>
-
-                              {/* Closing Balance Row */}
-                              <tr className="bg-blue-100 font-bold border-t-4 border-blue-500">
-                                <td className="px-4 py-3 text-sm sticky left-0 bg-blue-100 z-10">
-                                  Closing Balance
-                                </td>
-                                {(() => {
-                                  let runningBalance = openingBalance;
-
-                                  return sortedMonths.map((month) => {
-                                    const inflow = Object.keys(
-                                      monthlyData[month] || {}
-                                    ).reduce((sum, desc) => {
-                                      return (
-                                        sum +
-                                        (monthlyData[month][desc]?.inflow || 0)
-                                      );
-                                    }, 0);
-                                    const outflow = Object.keys(
-                                      monthlyData[month] || {}
-                                    ).reduce((sum, desc) => {
-                                      return (
-                                        sum +
-                                        (monthlyData[month][desc]?.outflow || 0)
-                                      );
-                                    }, 0);
-
-                                    runningBalance =
-                                      runningBalance + inflow - outflow;
-
-                                    return (
-                                      <td
-                                        key={month}
-                                        className="px-4 py-3 text-right text-sm"
-                                      >
-                                        <span
-                                          className={
-                                            runningBalance >= 0
-                                              ? "text-blue-700"
-                                              : "text-red-700"
-                                          }
-                                        >
-                                          {formatCurrency(runningBalance)}
-                                        </span>
-                                      </td>
-                                    );
-                                  });
-                                })()}
-                              </tr>
-                            </>
-                          );
-                        })()}
-                      </tbody>
-                    </table>
-                  </div>
+                                });
+                              })()}
+                            </tr>
+                          </>
+                        );
+                      })()}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-            )}
+            </div>
 
             <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
               <div className="flex justify-between items-center mb-6">
@@ -6963,7 +8717,7 @@ export default function PLDashboard() {
                                 {transaction.description}
                               </td>
                               <td className="px-4 py-3 text-sm">
-                                {transaction.category}
+                                {transaction.category || "-"}
                               </td>
                               <td className="px-4 py-3 text-sm">
                                 <span
@@ -7027,7 +8781,6 @@ export default function PLDashboard() {
           </>
         )}
 
-        {/* Category Breakdown Modal */}
         {showCategoryBreakdown && selectedMonthBreakdown && (
           <div
             className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4"
@@ -7254,7 +9007,7 @@ export default function PLDashboard() {
 
                 <div>
                   <label className="block text-sm font-semibold mb-1">
-                    Category *
+                    Category (recommended)
                   </label>
                   <select
                     value={newTransaction.category}
@@ -7320,10 +9073,11 @@ export default function PLDashboard() {
                     if (
                       !newTransaction.date ||
                       !newTransaction.description ||
-                      !newTransaction.category ||
                       !newTransaction.amount
                     ) {
-                      alert("Please fill in all required fields");
+                      alert(
+                        "Please fill in required fields: Date, Description, and Amount"
+                      );
                       return;
                     }
 
