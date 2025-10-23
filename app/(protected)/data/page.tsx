@@ -142,8 +142,8 @@ export default function DataUploadPage() {
       shopify: "Shopify Orders",
       tiktok: "TikTok Orders",
       subscription: "Subscriptions",
-      pl_client1: "P&L - Client 1",
-      pl_client2: "P&L - Client 2",
+      pl_client1: "P&L - LiquidPlus",
+      pl_client2: "P&L - ADNA Research",
       sgd_transactions: "SGD Bank Transactions",
       usd_transactions: "USD Bank Transactions",
     };
@@ -155,12 +155,12 @@ export default function DataUploadPage() {
       shopify: "Upload order data from Shopify platform",
       tiktok: "Upload order data from TikTok Shop",
       subscription: "Upload subscription customer data",
-      pl_client1: "Upload profit & loss data for Client 1",
-      pl_client2: "Upload profit & loss data for Client 2",
+      pl_client1: "Upload profit & loss data for LiquidPlus",
+      pl_client2: "Upload profit & loss data for ADNA Research",
       sgd_transactions:
-        "Upload SGD bank statement for cashflow visualization (Client 2)",
+        "Upload SGD bank statement for cashflow visualization (ADNA Research)",
       usd_transactions:
-        "Upload USD bank statement for cashflow visualization (Client 2)",
+        "Upload USD bank statement for cashflow visualization (ADNA Research)",
     };
     return descriptions[key] || "";
   };
@@ -213,7 +213,8 @@ export default function DataUploadPage() {
             <li className="flex items-start gap-2">
               <span className="text-blue-600">•</span>
               <span>
-                All clients (Client 1 and Client 2) will see the uploaded data
+                All clients (LiquidPlus and ADNA Research) will see the uploaded
+                data
               </span>
             </li>
             <li className="flex items-start gap-2">

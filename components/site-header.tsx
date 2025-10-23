@@ -18,8 +18,8 @@ import { useSidebar } from "@/components/ui/sidebar";
 
 const breadcrumbMap: Record<string, string> = {
   "/": "Dashboard",
-  "/client1": "Client 1",
-  "/client2": "Client 2",
+  "/client1": "LiquidPlus",
+  "/client2": "ADNA Research",
   "/users": "User Management",
   "/users/roles": "Role Management",
   "/account": "Account Settings",

@@ -30,13 +30,13 @@ const navMain = [
     isActive: true,
   },
   {
-    title: "Client 1",
+    title: "LiquidPlus",
     url: "/client1",
     icon: "client1",
     isActive: true,
   },
   {
-    title: "Client 2",
+    title: "ADNA Research",
     url: "/client2",
     icon: "client2",
     isActive: true,
@@ -97,14 +97,14 @@ export function AppSidebar({
       // Admin sees everything
       return navMain;
     } else if (user.role === "client1") {
-      // Client1 sees only Client 1 and Settings (no Dashboard, no Data)
+      // Client1 sees only LiquidPlus and Settings (no Dashboard, no Data)
       return navMain.filter(
-        (item) => item.title === "Client 1" || item.title === "Settings"
+        (item) => item.title === "LiquidPlus" || item.title === "Settings"
       );
     } else if (user.role === "client2") {
-      // Client2 sees only Client 2 and Settings (no Dashboard, no Data)
+      // Client2 sees only ADNA Research and Settings (no Dashboard, no Data)
       return navMain.filter(
-        (item) => item.title === "Client 2" || item.title === "Settings"
+        (item) => item.title === "ADNA Research" || item.title === "Settings"
       );
     }
     // Default: show nothing

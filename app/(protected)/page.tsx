@@ -55,14 +55,14 @@ export default function DashboardPage() {
       bgColor: "bg-purple-50",
     },
     {
-      title: "Client 1 Users",
+      title: "LiquidPlus Users",
       value: stats?.counts.client1 || 0,
       icon: Building2,
       color: "text-orange-600",
       bgColor: "bg-orange-50",
     },
     {
-      title: "Client 2 Users",
+      title: "ADNA Research Users",
       value: stats?.counts.client2 || 0,
       icon: Building,
       color: "text-pink-600",
