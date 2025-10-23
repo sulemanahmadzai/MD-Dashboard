@@ -386,6 +386,50 @@ export default function PLDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings]);
 
+  // Auto-save opening balance to database
+  useEffect(() => {
+    if (
+      settings &&
+      openingBalance !== parseFloat(settings.cashflowOpeningBalance)
+    ) {
+      const timeoutId = setTimeout(() => {
+        saveSettings.mutate({ cashflowOpeningBalance: String(openingBalance) });
+      }, 1000); // Debounce 1 second
+      return () => clearTimeout(timeoutId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openingBalance]);
+
+  // Auto-save EBITDA adjustments to database
+  useEffect(() => {
+    if (
+      settings &&
+      JSON.stringify(ebitdaAdjustments) !==
+        JSON.stringify(settings.ebitdaAdjustments)
+    ) {
+      const timeoutId = setTimeout(() => {
+        saveSettings.mutate({ ebitdaAdjustments });
+      }, 1000);
+      return () => clearTimeout(timeoutId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ebitdaAdjustments]);
+
+  // Auto-save classifications to database
+  useEffect(() => {
+    if (
+      settings &&
+      JSON.stringify(classifications) !==
+        JSON.stringify(settings.classifications)
+    ) {
+      const timeoutId = setTimeout(() => {
+        saveSettings.mutate({ classifications });
+      }, 1000);
+      return () => clearTimeout(timeoutId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classifications]);
+
   const processData = async (data: any) => {
     setProcessing(true);
     setStatus({ type: "info", message: "Processing P&L data..." });
@@ -9655,20 +9699,32 @@ export default function PLDashboard() {
                     }
 
                     if (editingProjectCost) {
-                      setProjectCosts(
-                        projectCosts.map((pc) =>
-                          pc.id === editingProjectCost.id
-                            ? { ...newProjectCost, id: editingProjectCost.id }
-                            : pc
-                        )
-                      );
+                      // Update existing project cost in database
+                      updateProjectCost.mutate({
+                        ...newProjectCost,
+                        id: editingProjectCost.id,
+                      });
                     } else {
-                      setProjectCosts([
-                        ...projectCosts,
-                        { ...newProjectCost, id: Date.now() },
-                      ]);
+                      // Add new project cost to database
+                      addProjectCost.mutate(newProjectCost);
                     }
                     setShowProjectCostModal(false);
+                    setEditingProjectCost(null);
+                    setNewProjectCost({
+                      monthYear: "",
+                      projectName: "",
+                      client: "",
+                      market: "",
+                      baseAmountUSD: "",
+                      dataUSD: "",
+                      totalAmountUSD: "",
+                      baseAmountSGD: "",
+                      dataSGD: "",
+                      totalAmountSGD: "",
+                      projectRevenue: "",
+                      costPercentage: "",
+                      status: "Pending",
+                    });
                   }}
                   className="flex-1 bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700"
                 >
@@ -9996,20 +10052,33 @@ export default function PLDashboard() {
                     }
 
                     if (editingProject) {
-                      setProjects(
-                        projects.map((p) =>
-                          p.id === editingProject.id
-                            ? { ...newProject, id: editingProject.id }
-                            : p
-                        )
-                      );
+                      // Update existing project in database
+                      updateProject.mutate({
+                        ...newProject,
+                        id: editingProject.id,
+                      });
                     } else {
-                      setProjects([
-                        ...projects,
-                        { ...newProject, id: Date.now() },
-                      ]);
+                      // Add new project to database
+                      addProject.mutate(newProject);
                     }
                     setShowProjectModal(false);
+                    setEditingProject(null);
+                    setNewProject({
+                      date: "",
+                      clientProject: "",
+                      projectNumber: "",
+                      valueQuoted: "",
+                      quotedCurrency: "USD",
+                      valueSGD: "",
+                      numberOfStudies: "",
+                      purchaseOrder: "",
+                      fieldWorkStatus: "Not Started",
+                      fieldWorkStartDate: "",
+                      fieldWorkEndDate: "",
+                      reportStatus: "Not Started",
+                      invoiceStatus: "Not Issued",
+                      invoiceDate: "",
+                    });
                   }}
                   className="flex-1 bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700"
                 >
