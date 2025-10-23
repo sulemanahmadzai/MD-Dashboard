@@ -29,6 +29,8 @@ export async function GET(request: NextRequest) {
       subscription: false,
       pl_client1: false,
       pl_client2: false,
+      sgd_transactions: false,
+      usd_transactions: false,
     };
 
     // Mark which file types have been uploaded

@@ -7,6 +7,8 @@ interface CSVData {
   subscription: any[] | null;
   pl_client1: any[] | null;
   pl_client2: any[] | null;
+  sgd_transactions: any[] | null;
+  usd_transactions: any[] | null;
 }
 
 interface CSVStatus {
@@ -15,6 +17,8 @@ interface CSVStatus {
   subscription: boolean;
   pl_client1: boolean;
   pl_client2: boolean;
+  sgd_transactions: boolean;
+  usd_transactions: boolean;
 }
 
 /**
@@ -111,17 +115,24 @@ export function useCSVFileData(fileType: keyof CSVData) {
 }
 
 /**
- * Hook to fetch ONLY client2 P&L data (separate endpoint)
+ * Hook to fetch ONLY client2 data (separate endpoint)
+ * Includes P&L data, SGD transactions, and USD transactions
  * Uses dedicated endpoint for better caching (small payload)
  */
 export function useClient2Data() {
-  return useQuery<{ pl_client2: any[] | null }>({
+  return useQuery<{
+    pl_client2: any[] | null;
+    sgd_transactions: any[] | null;
+    usd_transactions: any[] | null;
+  }>({
     queryKey: ["csv-data-client2"],
     queryFn: async () => {
       // Try to get from localStorage cache first
-      const cached = getCachedData<{ pl_client2: any[] | null }>(
-        "csv-data-client2"
-      );
+      const cached = getCachedData<{
+        pl_client2: any[] | null;
+        sgd_transactions: any[] | null;
+        usd_transactions: any[] | null;
+      }>("csv-data-client2");
       if (cached) {
         console.log("📦 Using cached Client2 data from localStorage");
         return cached;

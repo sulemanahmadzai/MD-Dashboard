@@ -22,8 +22,8 @@ export async function GET() {
       );
     }
 
-    // Get the latest pl_client2 data
-    const data = await db
+    // Get the latest pl_client2, sgd_transactions, and usd_transactions data
+    const plData = await db
       .select()
       .from(csvUploads)
       .where(
@@ -35,8 +35,34 @@ export async function GET() {
       .orderBy(desc(csvUploads.uploadedAt))
       .limit(1);
 
+    const sgdData = await db
+      .select()
+      .from(csvUploads)
+      .where(
+        and(
+          eq(csvUploads.fileType, "sgd_transactions"),
+          eq(csvUploads.isActive, true)
+        )
+      )
+      .orderBy(desc(csvUploads.uploadedAt))
+      .limit(1);
+
+    const usdData = await db
+      .select()
+      .from(csvUploads)
+      .where(
+        and(
+          eq(csvUploads.fileType, "usd_transactions"),
+          eq(csvUploads.isActive, true)
+        )
+      )
+      .orderBy(desc(csvUploads.uploadedAt))
+      .limit(1);
+
     return NextResponse.json({
-      pl_client2: data.length > 0 ? data[0].data : null,
+      pl_client2: plData.length > 0 ? plData[0].data : null,
+      sgd_transactions: sgdData.length > 0 ? sgdData[0].data : null,
+      usd_transactions: usdData.length > 0 ? usdData[0].data : null,
     });
   } catch (error) {
     console.error("Error fetching client2 data:", error);

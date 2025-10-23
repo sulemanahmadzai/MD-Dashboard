@@ -257,6 +257,42 @@ export default function PLDashboard() {
     }
   }, [isLoading, error]);
 
+  // Load transaction data from API when available
+  useEffect(() => {
+    if (csvData?.sgd_transactions) {
+      const sgdData = csvData.sgd_transactions as any;
+      console.log("🔍 SGD Data received:", sgdData);
+      if (sgdData.transactions && Array.isArray(sgdData.transactions)) {
+        setBankTransactions(sgdData.transactions);
+        setBankOpeningBalance(sgdData.openingBalance || 0);
+        console.log(
+          "✅ Loaded SGD transactions from database:",
+          sgdData.transactions.length,
+          "transactions"
+        );
+        console.log("📊 SGD Opening Balance:", sgdData.openingBalance);
+        console.log("📝 Sample SGD transaction:", sgdData.transactions[0]);
+      }
+    }
+    if (csvData?.usd_transactions) {
+      const usdData = csvData.usd_transactions as any;
+      console.log("🔍 USD Data received:", usdData);
+      if (usdData.transactions && Array.isArray(usdData.transactions)) {
+        setUsdTransactions(usdData.transactions);
+        setUsdOpeningBalance(usdData.openingBalance || 0);
+        setUsdOpeningBalanceSGD(usdData.openingBalanceSGD || 0);
+        console.log(
+          "✅ Loaded USD transactions from database:",
+          usdData.transactions.length,
+          "transactions"
+        );
+        console.log("📊 USD Opening Balance:", usdData.openingBalance);
+        console.log("📊 USD Opening Balance (SGD):", usdData.openingBalanceSGD);
+        console.log("📝 Sample USD transaction:", usdData.transactions[0]);
+      }
+    }
+  }, [csvData]);
+
   const processData = async (data: any) => {
     setProcessing(true);
     setStatus({ type: "info", message: "Processing P&L data..." });
@@ -7142,9 +7178,39 @@ export default function PLDashboard() {
 
         {activeTab === "sankey" && (
           <>
-            {/* SGD and USD Upload Sections Side by Side */}
-            <div className="grid grid-cols-2 gap-6 mb-6">
-              {/* SGD Upload Section */}
+            {/* Data Info - SGD and USD transactions managed by admin */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
+              <div className="flex items-center gap-3 mb-2">
+                <AlertCircle className="w-6 h-6 text-blue-600" />
+                <h3 className="text-lg font-semibold text-blue-900">
+                  Bank Transaction Data
+                </h3>
+              </div>
+              <p className="text-sm text-blue-800 mb-2">
+                SGD and USD bank transaction data is managed by the
+                administrator through the Data Management page.
+              </p>
+              <ul className="text-sm text-blue-700 space-y-1">
+                <li>
+                  •{" "}
+                  {bankTransactions.length > 0
+                    ? `✓ SGD transactions loaded (${bankTransactions.length} transactions)`
+                    : "⚠️ No SGD transaction data available"}
+                </li>
+                <li>
+                  •{" "}
+                  {usdTransactions.length > 0
+                    ? `✓ USD transactions loaded (${usdTransactions.length} transactions)`
+                    : "⚠️ No USD transaction data available"}
+                </li>
+                <li>
+                  • Contact your administrator to upload or update bank
+                  statement files
+                </li>
+              </ul>
+            </div>
+            {/* OLD UPLOAD UI REMOVED - Now managed by admin in data page */}
+            <div className="hidden">
               <div className="bg-white rounded-2xl shadow-xl p-6">
                 <h2 className="text-2xl font-bold mb-4">SGD</h2>
                 <p className="text-gray-600 mb-2 text-sm">
@@ -7355,8 +7421,8 @@ export default function PLDashboard() {
                   </div>
                 </div>
               </div>
-            </div>
-
+            </div>{" "}
+            {/* End hidden old upload UI */}
             {usdTransactions.length > 0 && (
               <>
                 {/* Summary Cards */}
@@ -7426,7 +7492,6 @@ export default function PLDashboard() {
                 </div>
               </>
             )}
-
             {bankTransactions.length > 0 && (
               <>
                 {/* Summary Cards */}
@@ -7496,7 +7561,6 @@ export default function PLDashboard() {
                 </div>
               </>
             )}
-
             <div className="bg-white rounded-2xl shadow-xl p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold">
@@ -7646,6 +7710,16 @@ export default function PLDashboard() {
                         const closingBalance =
                           currentOpeningBalance + netCashflow;
 
+                        // Debug logging
+                        console.log("💰 Sankey Calculations:", {
+                          openingBalance: currentOpeningBalance,
+                          totalInflows,
+                          totalOutflows,
+                          netCashflow,
+                          closingBalance,
+                          transactionCount: currentTransactions.length,
+                        });
+
                         // Sort categories by amount
                         const sortedInflowCategories = Object.entries(
                           inflowByCategory
@@ -7655,11 +7729,14 @@ export default function PLDashboard() {
                         ).sort((a, b) => b[1].total - a[1].total);
 
                         return (
-                          <div className="w-full max-w-full">
-                            {/* Horizontal Layout */}
-                            <div className="flex flex-wrap items-center gap-4 lg:gap-8">
+                          <div className="w-full max-w-full overflow-x-auto">
+                            {/* Horizontal Layout - No wrapping */}
+                            <div
+                              className="flex items-start gap-4 lg:gap-8"
+                              style={{ minWidth: "1200px" }}
+                            >
                               {/* Column 1: Opening Balance & Inflow Sources */}
-                              <div className="flex flex-col gap-4 w-full sm:w-auto sm:min-w-[180px]">
+                              <div className="flex flex-col gap-4 min-w-[180px] flex-shrink-0">
                                 {/* Opening Balance */}
                                 <div className="bg-blue-500 text-white rounded-lg px-4 py-3 shadow-lg">
                                   <div className="text-xs font-semibold">
@@ -7706,16 +7783,13 @@ export default function PLDashboard() {
                               </div>
 
                               {/* Visual Flow Connector */}
-                              <div
-                                className="flex items-center"
-                                className="w-full sm:w-auto sm:min-w-[50px]"
-                              >
-                                <div className="w-full h-1 bg-gradient-to-r from-blue-400 to-indigo-500"></div>
+                              <div className="flex items-center min-w-[50px] flex-shrink-0">
+                                <div className="w-12 h-1 bg-gradient-to-r from-blue-400 to-indigo-500"></div>
                                 <div className="w-0 h-0 border-t-8 border-b-8 border-l-8 border-transparent border-l-indigo-500"></div>
                               </div>
 
                               {/* Column 2: Total Inflows Hub */}
-                              <div className="w-full sm:w-auto sm:min-w-[160px]">
+                              <div className="min-w-[160px] flex-shrink-0">
                                 <div className="bg-indigo-500 text-white rounded-lg px-6 py-4 shadow-xl">
                                   <div className="text-xs font-semibold">
                                     Total Inflows
@@ -7727,19 +7801,13 @@ export default function PLDashboard() {
                               </div>
 
                               {/* Visual Flow Connector */}
-                              <div
-                                className="flex items-center"
-                                className="w-full sm:w-auto sm:min-w-[50px]"
-                              >
-                                <div className="w-full h-1 bg-gradient-to-r from-indigo-500 to-orange-400"></div>
+                              <div className="flex items-center min-w-[50px] flex-shrink-0">
+                                <div className="w-12 h-1 bg-gradient-to-r from-indigo-500 to-orange-400"></div>
                                 <div className="w-0 h-0 border-t-8 border-b-8 border-l-8 border-transparent border-l-orange-400"></div>
                               </div>
 
                               {/* Column 3: Expense Categories */}
-                              <div
-                                className="flex flex-col gap-3"
-                                className="w-full sm:w-auto sm:min-w-[200px]"
-                              >
+                              <div className="flex flex-col gap-3 min-w-[200px] flex-shrink-0">
                                 <h3 className="text-sm font-bold text-gray-700">
                                   Expense Categories
                                 </h3>
@@ -7777,16 +7845,13 @@ export default function PLDashboard() {
                               </div>
 
                               {/* Visual Flow Connector */}
-                              <div
-                                className="flex items-center"
-                                className="w-full sm:w-auto sm:min-w-[50px]"
-                              >
-                                <div className="w-full h-1 bg-gradient-to-r from-green-400 to-purple-400"></div>
+                              <div className="flex items-center min-w-[50px] flex-shrink-0">
+                                <div className="w-12 h-1 bg-gradient-to-r from-green-400 to-purple-400"></div>
                                 <div className="w-0 h-0 border-t-8 border-b-8 border-l-8 border-transparent border-l-purple-400"></div>
                               </div>
 
                               {/* Column 4: Individual Contacts/Payees */}
-                              <div className="flex-1">
+                              <div className="min-w-[300px] flex-shrink-0">
                                 <h3 className="text-sm font-bold text-gray-700 mb-3">
                                   Individual Payees/Recipients
                                 </h3>

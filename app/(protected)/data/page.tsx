@@ -31,6 +31,8 @@ interface UploadStatus {
   subscription: boolean;
   pl_client1: boolean;
   pl_client2: boolean;
+  sgd_transactions: boolean;
+  usd_transactions: boolean;
 }
 
 export default function DataUploadPage() {
@@ -51,6 +53,8 @@ export default function DataUploadPage() {
     subscription: false,
     pl_client1: false,
     pl_client2: false,
+    sgd_transactions: false,
+    usd_transactions: false,
   };
 
   useEffect(() => {
@@ -102,7 +106,11 @@ export default function DataUploadPage() {
       clearCache("csv-status");
 
       // Clear client2 dedicated cache if client2 data was uploaded
-      if (fileType === "pl_client2") {
+      if (
+        fileType === "pl_client2" ||
+        fileType === "sgd_transactions" ||
+        fileType === "usd_transactions"
+      ) {
         clearCache("csv-data-client2");
       }
 
@@ -136,6 +144,8 @@ export default function DataUploadPage() {
       subscription: "Subscriptions",
       pl_client1: "P&L - Client 1",
       pl_client2: "P&L - Client 2",
+      sgd_transactions: "SGD Bank Transactions",
+      usd_transactions: "USD Bank Transactions",
     };
     return labels[key] || key;
   };
@@ -147,6 +157,10 @@ export default function DataUploadPage() {
       subscription: "Upload subscription customer data",
       pl_client1: "Upload profit & loss data for Client 1",
       pl_client2: "Upload profit & loss data for Client 2",
+      sgd_transactions:
+        "Upload SGD bank statement for cashflow visualization (Client 2)",
+      usd_transactions:
+        "Upload USD bank statement for cashflow visualization (Client 2)",
     };
     return descriptions[key] || "";
   };
@@ -165,6 +179,8 @@ export default function DataUploadPage() {
     { key: "subscription", icon: "💎" },
     { key: "pl_client1", icon: "📊" },
     { key: "pl_client2", icon: "📈" },
+    { key: "sgd_transactions", icon: "💰" },
+    { key: "usd_transactions", icon: "💵" },
   ];
 
   return (
@@ -327,7 +343,11 @@ export default function DataUploadPage() {
                   }
                   clearCache("csv-data");
                   clearCache("csv-status");
-                  if (pendingDeleteKey === "pl_client2") {
+                  if (
+                    pendingDeleteKey === "pl_client2" ||
+                    pendingDeleteKey === "sgd_transactions" ||
+                    pendingDeleteKey === "usd_transactions"
+                  ) {
                     clearCache("csv-data-client2");
                   }
                   refetchStatus();

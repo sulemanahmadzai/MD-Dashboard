@@ -51,7 +51,7 @@ export const csvUploads = pgTable("csv_uploads", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
-  fileType: varchar("file_type", { length: 50 }).notNull(), // 'shopify', 'tiktok', 'subscription', 'pl_client1', 'pl_client2'
+  fileType: varchar("file_type", { length: 50 }).notNull(), // 'shopify', 'tiktok', 'subscription', 'pl_client1', 'pl_client2', 'sgd_transactions', 'usd_transactions'
   data: json("data").notNull(), // Store processed CSV data as JSON
   uploadedBy: text("uploaded_by")
     .notNull()
@@ -93,6 +93,8 @@ export const insertCSVUploadSchema = createInsertSchema(csvUploads, {
     "subscription",
     "pl_client1",
     "pl_client2",
+    "sgd_transactions",
+    "usd_transactions",
   ]),
   data: z.any(),
 }).omit({
