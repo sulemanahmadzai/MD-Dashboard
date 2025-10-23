@@ -27,6 +27,26 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useClient2Data } from "@/lib/hooks/use-csv-data";
+import {
+  useCashflowTransactions,
+  useAddCashflowTransaction,
+  useUpdateCashflowTransaction,
+  useDeleteCashflowTransaction,
+  usePipelineDeals,
+  useAddPipelineDeal,
+  useUpdatePipelineDeal,
+  useDeletePipelineDeal,
+  useProjects,
+  useAddProject,
+  useUpdateProject,
+  useDeleteProject,
+  useProjectCosts,
+  useAddProjectCost,
+  useUpdateProjectCost,
+  useDeleteProjectCost,
+  useClient2Settings,
+  useSaveClient2Settings,
+} from "@/lib/hooks/use-client2-data";
 
 export default function PLDashboard() {
   const [activeTab, setActiveTab] = useState("pl");
@@ -48,7 +68,29 @@ export default function PLDashboard() {
   // Use React Query hook for cached data (dedicated client2 endpoint)
   const { data: csvData, isLoading, error } = useClient2Data();
 
-  // Projects state
+  // Load all Client2 data from database
+  const { data: cashTransactionsData = [] } = useCashflowTransactions();
+  const { data: projectsData = [] } = useProjects();
+  const { data: projectCostsData = [] } = useProjectCosts();
+  const { data: dealsData = [] } = usePipelineDeals();
+  const { data: settings } = useClient2Settings();
+
+  // Mutations
+  const addCashTransaction = useAddCashflowTransaction();
+  const updateCashTransaction = useUpdateCashflowTransaction();
+  const deleteCashTransaction = useDeleteCashflowTransaction();
+  const addProject = useAddProject();
+  const updateProject = useUpdateProject();
+  const deleteProject = useDeleteProject();
+  const addProjectCost = useAddProjectCost();
+  const updateProjectCost = useUpdateProjectCost();
+  const deleteProjectCost = useDeleteProjectCost();
+  const addDeal = useAddPipelineDeal();
+  const updateDeal = useUpdatePipelineDeal();
+  const deleteDeal = useDeletePipelineDeal();
+  const saveSettings = useSaveClient2Settings();
+
+  // Projects state - use data from database
   const [projects, setProjects] = useState([]);
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
@@ -292,6 +334,57 @@ export default function PLDashboard() {
       }
     }
   }, [csvData]);
+
+  // Load Client2 data from database (with stable reference checks)
+  useEffect(() => {
+    if (cashTransactionsData && cashTransactionsData.length > 0) {
+      setCashTransactions(cashTransactionsData);
+    }
+  }, [JSON.stringify(cashTransactionsData)]);
+
+  useEffect(() => {
+    if (projectsData && projectsData.length > 0) {
+      setProjects(projectsData);
+    }
+  }, [JSON.stringify(projectsData)]);
+
+  useEffect(() => {
+    if (projectCostsData && projectCostsData.length > 0) {
+      setProjectCosts(projectCostsData);
+    }
+  }, [JSON.stringify(projectCostsData)]);
+
+  useEffect(() => {
+    if (dealsData && dealsData.length > 0) {
+      setDeals(dealsData);
+    }
+  }, [JSON.stringify(dealsData)]);
+
+  // Load settings from database (with stable reference check)
+  useEffect(() => {
+    if (settings) {
+      const newOpeningBalance =
+        parseFloat(settings.cashflowOpeningBalance) || 0;
+      if (openingBalance !== newOpeningBalance) {
+        setOpeningBalance(newOpeningBalance);
+      }
+      if (
+        settings.ebitdaAdjustments &&
+        JSON.stringify(ebitdaAdjustments) !==
+          JSON.stringify(settings.ebitdaAdjustments)
+      ) {
+        setEbitdaAdjustments(settings.ebitdaAdjustments);
+      }
+      if (
+        settings.classifications &&
+        JSON.stringify(classifications) !==
+          JSON.stringify(settings.classifications)
+      ) {
+        setClassifications(settings.classifications);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings]);
 
   const processData = async (data: any) => {
     setProcessing(true);
@@ -729,15 +822,21 @@ export default function PLDashboard() {
     }
 
     if (editingDeal) {
-      setDeals((prevDeals) =>
-        prevDeals.map((d) =>
-          d.id === editingDeal.id ? { ...newDeal, id: editingDeal.id } : d
-        )
-      );
+      updateDeal.mutate({ ...newDeal, id: editingDeal.id });
     } else {
-      setDeals((prevDeals) => [...prevDeals, { ...newDeal, id: Date.now() }]);
+      addDeal.mutate(newDeal);
     }
     setShowDealModal(false);
+    setEditingDeal(null);
+    setNewDeal({
+      clientName: "",
+      dealName: "",
+      dealValue: "",
+      stage: "Lead",
+      probability: "10",
+      expectedCloseDate: "",
+      revenueBreakdown: [],
+    });
   };
 
   const handleDeleteDeal = (dealId) => {
@@ -748,7 +847,7 @@ export default function PLDashboard() {
         `Delete "${dealToDelete.dealName}" from ${dealToDelete.clientName}?`
       )
     ) {
-      setDeals(deals.filter((d) => d.id !== dealId));
+      deleteDeal.mutate(dealId);
       setShowDealModal(false);
     }
   };
@@ -9147,20 +9246,24 @@ export default function PLDashboard() {
                     }
 
                     if (editingTransaction) {
-                      setCashTransactions(
-                        cashTransactions.map((t) =>
-                          t.id === editingTransaction.id
-                            ? { ...newTransaction, id: editingTransaction.id }
-                            : t
-                        )
-                      );
+                      // Update existing transaction in database
+                      updateCashTransaction.mutate({
+                        ...newTransaction,
+                        id: editingTransaction.id,
+                      });
                     } else {
-                      setCashTransactions([
-                        ...cashTransactions,
-                        { ...newTransaction, id: Date.now() },
-                      ]);
+                      // Add new transaction to database
+                      addCashTransaction.mutate(newTransaction);
                     }
                     setShowCashModal(false);
+                    setEditingTransaction(null);
+                    setNewTransaction({
+                      date: "",
+                      description: "",
+                      category: "",
+                      type: "inflow",
+                      amount: "",
+                    });
                   }}
                   className="flex-1 bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700"
                 >
@@ -10255,7 +10358,7 @@ export default function PLDashboard() {
               <div className="flex gap-3">
                 <button
                   onClick={() => {
-                    setDeals(deals.filter((d) => d.id !== dealToDelete.id));
+                    deleteDeal.mutate(dealToDelete.id);
                     setShowDeleteConfirm(false);
                     setShowDealModal(false);
                     setDealToDelete(null);
