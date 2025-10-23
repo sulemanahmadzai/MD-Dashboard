@@ -1,21 +1,15 @@
 {
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/next"
-    }
-  ],
-  "buildCommand": "next build",
   "framework": "nextjs",
+  "buildCommand": "next build",
   "installCommand": "npm install",
   "env": {
     "NEXT_TELEMETRY_DISABLED": "1"
   },
   "functions": {
-    "app/**/*.tsx": {
+    "app/**/*.ts": {
       "maxDuration": 60
     },
-    "app/**/*.ts": {
+    "app/**/*.tsx": {
       "maxDuration": 60
     }
   }
