@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "The Brearded Gorilla",
+  title: "The Bearded Gorilla",
   description: "Multi-client dashboard for data management and analytics",
   icons: {
     icon: [
