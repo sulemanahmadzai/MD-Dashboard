@@ -41,6 +41,13 @@ const navMain = [
     icon: "client2",
     isActive: true,
   },
+
+  {
+    title: "Demo Co.",
+    url: "/client3",
+    icon: "client3",
+    isActive: true,
+  },
   {
     title: "User Management",
     url: "/users",
