@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import AdminClassificationModal from "@/components/admin-classification-modal";
 
 interface UploadStatus {
   shopify: boolean;
@@ -40,6 +41,8 @@ export default function DataUploadPage() {
   const [currentUpload, setCurrentUpload] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [pendingDeleteKey, setPendingDeleteKey] = useState<string | null>(null);
+  const [showClassificationModal, setShowClassificationModal] = useState(false);
+  const [extractedCategories, setExtractedCategories] = useState<string[]>([]);
   const router = useRouter();
 
   // Use React Query hooks for user and CSV status
@@ -101,6 +104,8 @@ export default function DataUploadPage() {
         throw new Error(errorData.error || "Upload failed");
       }
 
+      const responseData = await response.json();
+
       // Clear cache and refetch status
       clearCache("csv-data");
       clearCache("csv-status");
@@ -116,11 +121,25 @@ export default function DataUploadPage() {
 
       refetchStatus();
 
-      toast.success("Upload successful!", {
-        description: `${getFileLabel(
-          fileType
-        )} has been uploaded and is now available.`,
-      });
+      // Show classification modal for pl_client2 if categories were extracted
+      if (
+        fileType === "pl_client2" &&
+        responseData.extractedCategories?.length > 0
+      ) {
+        setExtractedCategories(responseData.extractedCategories);
+        setShowClassificationModal(true);
+        toast.success("Upload successful!", {
+          description: `${getFileLabel(
+            fileType
+          )} has been uploaded. Please classify the categories.`,
+        });
+      } else {
+        toast.success("Upload successful!", {
+          description: `${getFileLabel(
+            fileType
+          )} has been uploaded and is now available.`,
+        });
+      }
     } catch (error: unknown) {
       console.error("Upload error:", error);
       toast.error("Upload failed", {
@@ -163,6 +182,21 @@ export default function DataUploadPage() {
         "Upload USD bank statement for cashflow visualization (ADNA Research)",
     };
     return descriptions[key] || "";
+  };
+
+  const handleClassificationSave = (
+    classifications: Record<string, string>
+  ) => {
+    setShowClassificationModal(false);
+    setExtractedCategories([]);
+    toast.success("Classifications saved!", {
+      description: "All client2 users will now use these classifications.",
+    });
+  };
+
+  const handleClassificationClose = () => {
+    setShowClassificationModal(false);
+    setExtractedCategories([]);
   };
 
   if (!session) {
@@ -373,6 +407,14 @@ export default function DataUploadPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Admin Classification Modal */}
+      <AdminClassificationModal
+        isOpen={showClassificationModal}
+        onClose={handleClassificationClose}
+        categories={extractedCategories}
+        onSave={handleClassificationSave}
+      />
     </div>
   );
 }

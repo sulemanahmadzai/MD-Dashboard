@@ -27,6 +27,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useClient2Data } from "@/lib/hooks/use-csv-data";
+import { useGlobalClassifications } from "@/lib/hooks/use-global-classifications";
 import {
   useCashflowTransactions,
   useAddCashflowTransaction,
@@ -67,6 +68,12 @@ export default function PLDashboard() {
 
   // Use React Query hook for cached data (dedicated client2 endpoint)
   const { data: csvData, isLoading, error } = useClient2Data();
+
+  // Load global classifications
+  const {
+    data: globalClassificationsData,
+    isLoading: isLoadingGlobalClassifications,
+  } = useGlobalClassifications();
 
   // Load all Client2 data from database
   const { data: cashTransactionsData = [] } = useCashflowTransactions();
@@ -220,50 +227,9 @@ export default function PLDashboard() {
     revenueBreakdown: [], // Array of {month: '01', year: '2025', amount: ''}
   });
 
-  const [classifications, setClassifications] = useState({
-    "Other Revenue": "Other Revenue",
-    "Research Revenue - Qualitative": "Qual Revenue",
-    "Research Revenue - Quantitative": "Quant Revenue",
-    "Research Costs (Qual)": "Cost of Sales (Qual)",
-    "Research Costs (Quant)": "Cost of Sales (Quant)",
-    "Translation Costs": "Cost of Sales (Quant)",
-    Others: "Cost of Sales (Other)",
-    "AWS (Server Costs)": "Cost of Sales",
-    Advertising: "Admin Cost",
-    "Bank Fees": "Admin Cost",
-    "Bank Revaluations": "Admin Cost",
-    "Consulting & Accounting": "Admin Cost",
-    "Corporate Secretarial Fees": "Admin Cost",
-    Entertainment: "Admin Cost",
-    "Freight & Courier": "Admin Cost",
-    "General Expenses": "Admin Cost",
-    "Legal expenses": "Admin Cost",
-    "Office Expenses": "Admin Cost",
-    "Printing & Stationery": "Admin Cost",
-    "Realised Currency Gains": "Admin Cost",
-    Depreciation: "Admin Cost",
-    "Stripe Fees T": "Admin Cost",
-    Subscriptions: "Admin Cost",
-    "Travel - International": "Admin Cost",
-    "Travel - National": "Admin Cost",
-    "Unrealised Currency Gains": "Admin Cost",
-    Website: "Admin Cost",
-    Server: "Admin Cost",
-    "CDAC/SINDA/MENDAKI/Others": "Employment Cost",
-    Commission: "Employment Cost",
-    "CPF - Indirect Team": "Employment Cost",
-    "CPF - Research Team": "Employment Cost",
-    "Employee SDL": "Employment Cost",
-    Insurance: "Employment Cost",
-    "Salaries - Indirect Team": "Employment Cost",
-    "Salaries - Research Team": "Employment Cost",
-    "Salaries - Tech Team": "Employment Cost",
-    "Salaries - Sales and Marketing": "Employment Cost",
-    "Salaries - Account Servicing": "Employment Cost",
-    Bonuses: "Employment Cost",
-    Senor: "Employment Cost",
-    "Interest Expense": "Financing Cost",
-  });
+  const [classifications, setClassifications] = useState<
+    Record<string, string>
+  >({});
 
   const classificationCategories = [
     "Other Revenue",
@@ -375,16 +341,16 @@ export default function PLDashboard() {
       ) {
         setEbitdaAdjustments(settings.ebitdaAdjustments);
       }
-      if (
-        settings.classifications &&
-        JSON.stringify(classifications) !==
-          JSON.stringify(settings.classifications)
-      ) {
-        setClassifications(settings.classifications);
-      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings]);
+
+  // Load global classifications
+  useEffect(() => {
+    if (globalClassificationsData?.classifications) {
+      setClassifications(globalClassificationsData.classifications);
+    }
+  }, [globalClassificationsData]);
 
   // Auto-save opening balance to database
   useEffect(() => {
@@ -415,20 +381,7 @@ export default function PLDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ebitdaAdjustments]);
 
-  // Auto-save classifications to database
-  useEffect(() => {
-    if (
-      settings &&
-      JSON.stringify(classifications) !==
-        JSON.stringify(settings.classifications)
-    ) {
-      const timeoutId = setTimeout(() => {
-        saveSettings.mutate({ classifications });
-      }, 1000);
-      return () => clearTimeout(timeoutId);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classifications]);
+  // Note: Classifications are now managed globally by admin, no auto-save needed
 
   const processData = async (data: any) => {
     setProcessing(true);
@@ -555,13 +508,25 @@ export default function PLDashboard() {
       });
 
       if (unclassified.length > 0) {
-        setUnclassifiedItems(
-          unclassified.map((item) => ({ name: item, category: "" }))
-        );
-        setShowClassificationModal(true);
-        setDashboardData({ plData, accountColumn, months, monthStatus });
-        setProcessing(false);
-        setStatus({ type: "info", message: "Please classify new line items" });
+        // Check if global classifications exist
+        if (globalClassificationsData?.hasClassifications) {
+          // Use global classifications - no modal needed
+          setDashboardData({ plData, accountColumn, months, monthStatus });
+          setStatus({ type: "success", message: "Processing complete!" });
+          setProcessing(false);
+        } else {
+          // No global classifications - show modal for admin to set up
+          setUnclassifiedItems(
+            unclassified.map((item) => ({ name: item, category: "" }))
+          );
+          setShowClassificationModal(true);
+          setDashboardData({ plData, accountColumn, months, monthStatus });
+          setProcessing(false);
+          setStatus({
+            type: "info",
+            message: "Please classify new line items",
+          });
+        }
       } else {
         setDashboardData({ plData, accountColumn, months, monthStatus });
         setStatus({ type: "success", message: "Processing complete!" });

@@ -173,6 +173,23 @@ export const client2Settings = pgTable("client2_settings", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// Global Client2 Classifications table (admin-managed, applies to all client2 users)
+export const globalClient2Classifications = pgTable(
+  "global_client2_classifications",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    classifications: json("classifications").notNull(), // Object with classification mappings
+    isActive: boolean("is_active").notNull().default(true),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  }
+);
+
 // Zod schemas for validation
 export const insertUserSchema = createInsertSchema(users, {
   email: z.string().email("Invalid email address"),
@@ -252,6 +269,14 @@ export const insertClient2SettingsSchema = createInsertSchema(
   updatedAt: true,
 });
 
+export const insertGlobalClient2ClassificationsSchema = createInsertSchema(
+  globalClient2Classifications
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type NewUser = z.infer<typeof insertUserSchema>;
@@ -273,3 +298,8 @@ export type ProjectCost = typeof projectCosts.$inferSelect;
 export type NewProjectCost = z.infer<typeof insertProjectCostSchema>;
 export type Client2Settings = typeof client2Settings.$inferSelect;
 export type NewClient2Settings = z.infer<typeof insertClient2SettingsSchema>;
+export type GlobalClient2Classifications =
+  typeof globalClient2Classifications.$inferSelect;
+export type NewGlobalClient2Classifications = z.infer<
+  typeof insertGlobalClient2ClassificationsSchema
+>;

@@ -244,6 +244,76 @@ function processTransactionData(
   return result;
 }
 
+// Helper function to extract categories from P&L data
+function extractCategoriesFromPLData(rawData: any[]): string[] {
+  if (!rawData || rawData.length === 0) {
+    throw new Error("No data found in P&L CSV file");
+  }
+
+  const categories = new Set<string>();
+
+  // Look for category/class columns in the data
+  const firstRow = rawData[0];
+  const headers = Object.keys(firstRow);
+
+  // Common column names that might contain categories
+  const categoryColumnNames = [
+    "category",
+    "class",
+    "classification",
+    "line_item",
+    "description",
+    "account",
+    "account_name",
+    "item",
+    "type",
+    "category_name",
+  ];
+
+  // Find the category column
+  let categoryColumn = null;
+  for (const header of headers) {
+    const lowerHeader = header.toLowerCase().trim();
+    if (categoryColumnNames.some((name) => lowerHeader.includes(name))) {
+      categoryColumn = header;
+      break;
+    }
+  }
+
+  if (!categoryColumn) {
+    // If no specific category column found, try to use the first text column
+    const textColumns = headers.filter((header) => {
+      const value = firstRow[header];
+      return typeof value === "string" && value.trim().length > 0;
+    });
+
+    if (textColumns.length > 0) {
+      categoryColumn = textColumns[0];
+    } else {
+      throw new Error("No suitable category column found in P&L data");
+    }
+  }
+
+  // Extract unique categories
+  for (const row of rawData) {
+    const categoryValue = row[categoryColumn];
+    if (categoryValue && typeof categoryValue === "string") {
+      const trimmed = categoryValue.trim();
+      if (trimmed.length > 0) {
+        categories.add(trimmed);
+      }
+    }
+  }
+
+  const categoryArray = Array.from(categories).sort();
+  console.log(
+    `✅ Extracted ${categoryArray.length} categories from P&L data:`,
+    categoryArray
+  );
+
+  return categoryArray;
+}
+
 // GET - Fetch CSV data (all authenticated users can read)
 export async function GET(request: NextRequest) {
   try {
@@ -323,12 +393,26 @@ export async function POST(request: NextRequest) {
 
     // Process transaction data if it's SGD or USD transactions
     let processedData = data;
+    let extractedCategories: string[] = [];
+
     if (fileType === "sgd_transactions" || fileType === "usd_transactions") {
       try {
         processedData = processTransactionData(data, fileType);
       } catch (error: any) {
         return NextResponse.json(
           { error: `Failed to process transaction data: ${error.message}` },
+          { status: 400 }
+        );
+      }
+    } else if (fileType === "pl_client2") {
+      // Extract categories from P&L data
+      try {
+        extractedCategories = extractCategoriesFromPLData(data);
+      } catch (error: any) {
+        return NextResponse.json(
+          {
+            error: `Failed to extract categories from P&L data: ${error.message}`,
+          },
           { status: 400 }
         );
       }
@@ -354,6 +438,11 @@ export async function POST(request: NextRequest) {
         fileType: newUpload.fileType,
         uploadedAt: newUpload.uploadedAt,
       },
+      // Include extracted categories for pl_client2
+      ...(fileType === "pl_client2" &&
+        extractedCategories.length > 0 && {
+          extractedCategories,
+        }),
     });
   } catch (error) {
     console.error("Error uploading CSV data:", error);
