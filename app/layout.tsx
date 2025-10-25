@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MD Dashboard",
+  title: "The Brearded Gorilla",
   description: "Multi-client dashboard for data management and analytics",
   icons: {
     icon: [
