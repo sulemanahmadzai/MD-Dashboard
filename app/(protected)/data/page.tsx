@@ -291,14 +291,44 @@ export default function DataUploadPage() {
     );
   }
 
-  const fileTypes = [
-    { key: "shopify", icon: "📦" },
-    { key: "tiktok", icon: "🎵" },
-    { key: "subscription", icon: "💎" },
-    { key: "pl_client1", icon: "📊" },
-    { key: "pl_client2", icon: "📈" },
-    { key: "sgd_transactions", icon: "💰" },
-    { key: "usd_transactions", icon: "💵" },
+  // Organize by client for better UX
+  // To add a new client: Add a new object here with unique clientName, clientCode, color, and files
+  const clientDataSections = [
+    {
+      clientName: "LiquidPlus",
+      clientCode: "Client 1",
+      color: "blue",
+      description: "E-commerce business tracking Shopify & TikTok sales",
+      files: [
+        { key: "shopify", icon: "📦", label: "Shopify Orders" },
+        { key: "tiktok", icon: "🎵", label: "TikTok Orders" },
+        { key: "subscription", icon: "💎", label: "Subscriptions" },
+        { key: "pl_client1", icon: "📊", label: "P&L Statement" },
+      ],
+    },
+    {
+      clientName: "ADNA Research",
+      clientCode: "Client 2",
+      color: "purple",
+      description: "Research company with qualitative & quantitative services",
+      files: [
+        { key: "pl_client2", icon: "📈", label: "P&L Statement" },
+        { key: "sgd_transactions", icon: "💰", label: "SGD Bank Transactions" },
+        { key: "usd_transactions", icon: "💵", label: "USD Bank Transactions" },
+      ],
+    },
+    // Add new clients here following the same pattern
+    // Example for Client 3:
+    // {
+    //   clientName: "Your Company Name",
+    //   clientCode: "Client 3",
+    //   color: "green", // Available: "blue", "purple", "green"
+    //   description: "Brief description of the business",
+    //   files: [
+    //     { key: "pl_client3", icon: "📊", label: "P&L Statement" },
+    //     // Add more files as needed
+    //   ],
+    // },
   ];
 
   return (
@@ -313,118 +343,148 @@ export default function DataUploadPage() {
         </div>
       </div>
 
-      <Card className="bg-blue-50 border-blue-200">
-        <CardHeader>
-          <CardTitle className="text-blue-900 flex items-center gap-2">
-            <AlertCircle className="w-5 h-5" />
-            Instructions
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="text-sm text-blue-800 space-y-2">
-            <li className="flex items-start gap-2">
-              <span className="text-blue-600">•</span>
-              <span>
-                Upload CSV files for each data source using the cards below
-              </span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-blue-600">•</span>
-              <span>
-                All clients (LiquidPlus and ADNA Research) will see the uploaded
-                data
-              </span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-blue-600">•</span>
-              <span>Re-uploading a file will replace the previous data</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-blue-600">•</span>
-              <span>
-                Data is cached for performance - changes may take a moment to
-                reflect
-              </span>
-            </li>
-          </ul>
-        </CardContent>
-      </Card>
-
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {fileTypes.map(({ key, icon }) => (
-          <Card
-            key={key}
-            className={`transition-all hover:shadow-lg ${
-              status[key as keyof UploadStatus]
-                ? "border-green-500 shadow-md"
-                : "border-border"
-            }`}
+      {/* Client-organized sections */}
+      {clientDataSections.map((section) => (
+        <div key={section.clientCode} className="space-y-4">
+          {/* Client Section Header */}
+          <div
+            className={`bg-gradient-to-r ${
+              section.color === "blue"
+                ? "from-blue-100 to-blue-50 border-blue-300"
+                : section.color === "purple"
+                ? "from-purple-100 to-purple-50 border-purple-300"
+                : "from-green-100 to-green-50 border-green-300"
+            } rounded-xl p-6 border-2`}
           >
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <span className="text-2xl">{icon}</span>
-                  <span className="text-lg">{getFileLabel(key)}</span>
-                </CardTitle>
-                {status[key as keyof UploadStatus] && (
-                  <Badge variant="default" className="bg-green-600">
-                    <CheckCircle className="w-3 h-3 mr-1" />
-                    Uploaded
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+                  {section.clientName}
+                  <Badge
+                    variant="outline"
+                    className={`${
+                      section.color === "blue"
+                        ? "bg-blue-200 text-blue-900 border-blue-400"
+                        : section.color === "purple"
+                        ? "bg-purple-200 text-purple-900 border-purple-400"
+                        : "bg-green-200 text-green-900 border-green-400"
+                    }`}
+                  >
+                    {section.clientCode}
                   </Badge>
-                )}
+                </h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  {section.description}
+                </p>
               </div>
-              <CardDescription>{getFileDescription(key)}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <label className="cursor-pointer block">
-                <input
-                  type="file"
-                  accept=".csv"
-                  onChange={(e) => handleFileUpload(e, key)}
-                  disabled={uploading}
-                  className="hidden"
-                />
-                <Button
-                  variant={
-                    status[key as keyof UploadStatus] ? "outline" : "default"
+              <div className="text-right">
+                <div className="text-xs text-gray-500 mb-1">Files Uploaded</div>
+                <div className="text-2xl font-bold text-gray-900">
+                  {
+                    section.files.filter(
+                      (f) => status[f.key as keyof UploadStatus]
+                    ).length
                   }
-                  className="w-full"
-                  disabled={uploading}
-                  asChild
-                >
-                  <div>
-                    {uploading && currentUpload === key ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2" />
-                        Uploading...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-4 h-4 mr-2" />
-                        {status[key as keyof UploadStatus]
-                          ? "Re-upload CSV"
-                          : "Upload CSV"}
-                      </>
-                    )}
+                  <span className="text-lg text-gray-400">
+                    /{section.files.length}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* File Upload Cards */}
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pl-4">
+            {section.files.map((file) => (
+              <Card
+                key={file.key}
+                className={`transition-all hover:shadow-lg ${
+                  status[file.key as keyof UploadStatus]
+                    ? "border-green-500 shadow-md bg-green-50"
+                    : "border-border hover:border-gray-400"
+                }`}
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-3xl">{file.icon}</span>
+                      <div>
+                        <CardTitle className="text-base">
+                          {file.label}
+                        </CardTitle>
+                        {status[file.key as keyof UploadStatus] && (
+                          <Badge
+                            variant="default"
+                            className="bg-green-600 mt-1"
+                          >
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            Active
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </Button>
-              </label>
-              {status[key as keyof UploadStatus] && (
-                <Button
-                  className="mt-3 w-full"
-                  disabled={uploading}
-                  onClick={() => {
-                    setPendingDeleteKey(key);
-                    setDeleteDialogOpen(true);
-                  }}
-                >
-                  Remove CSV
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                  <CardDescription className="text-xs mt-2">
+                    {getFileDescription(file.key)}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <label className="cursor-pointer block">
+                    <input
+                      type="file"
+                      accept=".csv"
+                      onChange={(e) => handleFileUpload(e, file.key)}
+                      disabled={uploading}
+                      className="hidden"
+                    />
+                    <Button
+                      variant={
+                        status[file.key as keyof UploadStatus]
+                          ? "outline"
+                          : "default"
+                      }
+                      size="sm"
+                      className="w-full"
+                      disabled={uploading}
+                      asChild
+                    >
+                      <div>
+                        {uploading && currentUpload === file.key ? (
+                          <>
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current mr-2" />
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-3 h-3 mr-2" />
+                            {status[file.key as keyof UploadStatus]
+                              ? "Re-upload"
+                              : "Upload CSV"}
+                          </>
+                        )}
+                      </div>
+                    </Button>
+                  </label>
+                  {status[file.key as keyof UploadStatus] && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mt-2 w-full text-red-600 hover:text-red-700 hover:bg-red-50"
+                      disabled={uploading}
+                      onClick={() => {
+                        setPendingDeleteKey(file.key);
+                        setDeleteDialogOpen(true);
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ))}
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>

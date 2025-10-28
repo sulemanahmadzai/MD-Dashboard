@@ -384,13 +384,13 @@ export default function PLDashboard() {
   }, [JSON.stringify(cashTransactionsData)]);
 
   useEffect(() => {
-    if (projectsData && projectsData.length > 0) {
+    if (projectsData !== undefined) {
       setProjects(projectsData);
     }
   }, [JSON.stringify(projectsData)]);
 
   useEffect(() => {
-    if (projectCostsData && projectCostsData.length > 0) {
+    if (projectCostsData !== undefined) {
       setProjectCosts(projectCostsData);
     }
   }, [JSON.stringify(projectCostsData)]);
@@ -9353,12 +9353,9 @@ export default function PLDashboard() {
                       if (
                         confirm(`Delete "${editingProjectCost.projectName}"?`)
                       ) {
-                        setProjectCosts(
-                          projectCosts.filter(
-                            (pc) => pc.id !== editingProjectCost.id
-                          )
-                        );
+                        deleteProjectCost.mutate(editingProjectCost.id);
                         setShowProjectCostModal(false);
+                        setEditingProjectCost(null);
                       }
                     }}
                     className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold"
@@ -9770,10 +9767,9 @@ export default function PLDashboard() {
                       if (
                         confirm(`Delete "${editingProject.clientProject}"?`)
                       ) {
-                        setProjects(
-                          projects.filter((p) => p.id !== editingProject.id)
-                        );
+                        deleteProject.mutate(editingProject.id);
                         setShowProjectModal(false);
+                        setEditingProject(null);
                       }
                     }}
                     className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold"
@@ -10341,7 +10337,7 @@ export default function PLDashboard() {
                     </label>
                     <input
                       type="date"
-                      value={newDeal.expectedCloseDate}
+                      value={newDeal.expectedCloseDate || ""}
                       onChange={(e) =>
                         setNewDeal({
                           ...newDeal,
