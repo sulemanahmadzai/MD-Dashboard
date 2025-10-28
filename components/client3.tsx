@@ -161,6 +161,8 @@ export default function PLDashboard() {
 
   // Auto-process Cashflow data when loaded from API
   useEffect(() => {
+    console.log("🔍 Debug - Full API data:", apiData);
+    console.log("🔍 Debug - API data for cashflow:", apiData?.cashflow_client3);
     if (apiData?.cashflow_client3 && !cashflowData) {
       processCashflowData(apiData.cashflow_client3);
     }
@@ -292,6 +294,8 @@ export default function PLDashboard() {
         message: "Processing cashflow data...",
       });
 
+      console.log("🔍 Debug - Raw cashflow data:", parsedData);
+
       if (!parsedData || parsedData.length === 0) {
         setCashflowStatus({
           type: "error",
@@ -303,18 +307,80 @@ export default function PLDashboard() {
 
       const firstRow = parsedData[0];
       const headers = Object.keys(firstRow);
+      console.log("🔍 Debug - Headers:", headers);
 
-      const accountIdx = headers.indexOf("Account");
-      const cashflowMonthColumns = headers.slice(accountIdx + 1);
+      // Try different possible column names for Account
+      const accountColumn =
+        headers.find(
+          (h) =>
+            h.toLowerCase().includes("account") ||
+            h.toLowerCase().includes("description") ||
+            h.toLowerCase().includes("item") ||
+            h.toLowerCase().includes("name") ||
+            h.toLowerCase().includes("contact")
+        ) || headers[0]; // fallback to first column
+
+      const accountIdx = headers.indexOf(accountColumn);
+
+      // If we can't find month columns after account, try to find them by looking for date-like patterns
+      let cashflowMonthColumns = headers.slice(accountIdx + 1);
+
+      // If no columns found after account, try to find month-like columns anywhere
+      if (cashflowMonthColumns.length === 0) {
+        cashflowMonthColumns = headers.filter((h) => {
+          const lower = h.toLowerCase();
+          return (
+            lower.includes("jan") ||
+            lower.includes("feb") ||
+            lower.includes("mar") ||
+            lower.includes("apr") ||
+            lower.includes("may") ||
+            lower.includes("jun") ||
+            lower.includes("jul") ||
+            lower.includes("aug") ||
+            lower.includes("sep") ||
+            lower.includes("oct") ||
+            lower.includes("nov") ||
+            lower.includes("dec") ||
+            lower.includes("q1") ||
+            lower.includes("q2") ||
+            lower.includes("q3") ||
+            lower.includes("q4") ||
+            /^\d{4}$/.test(h) ||
+            /^\d{1,2}\/\d{4}$/.test(h) ||
+            /^\d{4}-\d{1,2}$/.test(h)
+          );
+        });
+      }
+
+      // If still no columns found, use all columns except the first few (assuming they are metadata)
+      if (cashflowMonthColumns.length === 0) {
+        cashflowMonthColumns = headers.slice(2); // Skip first 2 columns
+      }
+      console.log("🔍 Debug - Account column:", accountColumn);
+      console.log("🔍 Debug - Account index:", accountIdx);
+      console.log("🔍 Debug - Month columns:", cashflowMonthColumns);
 
       const cashflowData = [];
       const classifications = {};
       const officesSet = new Set();
 
-      parsedData.forEach((row) => {
-        const classValue = row["Class"] || row["class"] || "";
-        const office = row["Office"] || row["office"] || "";
-        const account = row["Account"] || row["account"] || "";
+      parsedData.forEach((row, index) => {
+        // Try different possible column names
+        const classValue =
+          row["Class"] ||
+          row["class"] ||
+          row["Category"] ||
+          row["category"] ||
+          "";
+        const office =
+          row["Office"] ||
+          row["office"] ||
+          row["Location"] ||
+          row["location"] ||
+          "";
+        const account = row[accountColumn] || "";
+        const inflowOutflow = row["Inflow / Outflow"] || "";
 
         if (!account || !account.trim()) return;
 
@@ -322,15 +388,26 @@ export default function PLDashboard() {
           Class: classValue,
           Office: office,
           Account: account,
+          "Inflow / Outflow": inflowOutflow,
         };
 
         cashflowMonthColumns.forEach((month) => {
-          rowData[month] = row[month] || "";
+          const value = row[month] || "";
+          rowData[month] = value;
+          console.log(
+            `🔍 Debug - Row ${index}, Month ${month}:`,
+            value,
+            "Parsed:",
+            parseValue(value)
+          );
         });
 
         const hasData = cashflowMonthColumns.some(
           (m) => parseValue(rowData[m]) !== 0
         );
+
+        console.log(`🔍 Debug - Row ${index} has data:`, hasData);
+
         if (!hasData) return;
 
         cashflowData.push(rowData);
@@ -341,6 +418,8 @@ export default function PLDashboard() {
         }
       });
 
+      console.log("🔍 Debug - Processed cashflow data:", cashflowData);
+
       const offices = Array.from(officesSet).sort();
       const months = cashflowMonthColumns.map((col) => ({
         columnName: col,
@@ -349,7 +428,7 @@ export default function PLDashboard() {
 
       setCashflowData({
         cashflowItems: cashflowData,
-        accountColumn: "Account",
+        accountColumn: accountColumn,
         months,
         classifications,
         officeColumn: "Office",
@@ -497,6 +576,24 @@ export default function PLDashboard() {
           type: "success",
           message: `Loaded ${data.transactions.length} SGD transactions`,
         });
+      } else if (data && Array.isArray(data)) {
+        // Handle case where data is directly an array of transactions
+        const transformedData = {
+          cashflowItems: data.map((t, index) => ({
+            id: t.id || `sgd-${index}`,
+            Category: t.category || t.Category || "Uncategorized",
+            Contact: t.contact || t.Contact || "Unknown",
+            Type:
+              t.type === "inflow" || t.Type === "Inflow" ? "Inflow" : "Outflow",
+            Amount: parseFloat(t.amount || t.Amount || 0),
+          })),
+        };
+        setSgdSankeyData(transformedData);
+        setSgdOpeningBalance(0); // Default opening balance
+        setSgdSankeyStatus({
+          type: "success",
+          message: `Loaded ${data.length} SGD transactions`,
+        });
       } else {
         setSgdSankeyStatus({ type: "error", message: "No SGD data available" });
       }
@@ -531,6 +628,27 @@ export default function PLDashboard() {
         setUsdSankeyStatus({
           type: "success",
           message: `Loaded ${data.transactions.length} USD transactions`,
+        });
+      } else if (data && Array.isArray(data)) {
+        // Handle case where data is directly an array of transactions
+        const transformedData = {
+          cashflowItems: data.map((t, index) => ({
+            id: t.id || `usd-${index}`,
+            Category: t.category || t.Category || "Uncategorized",
+            Contact: t.contact || t.Contact || "Unknown",
+            Type:
+              t.type === "inflow" || t.Type === "Inflow" ? "Inflow" : "Outflow",
+            Amount: parseFloat(t.amount || t.Amount || 0),
+            AmountSGD: parseFloat(
+              t.amountSGD || t.AmountSGD || t.amount || t.Amount || 0
+            ),
+          })),
+        };
+        setUsdSankeyData(transformedData);
+        setUsdOpeningBalance(0); // Default opening balance
+        setUsdSankeyStatus({
+          type: "success",
+          message: `Loaded ${data.length} USD transactions`,
         });
       } else {
         setUsdSankeyStatus({ type: "error", message: "No USD data available" });
@@ -1314,20 +1432,77 @@ export default function PLDashboard() {
   };
 
   const getCashflowByType = () => {
-    if (!cashflowData) return null;
+    if (!cashflowData) {
+      console.log("🔍 Debug - getCashflowByType: No cashflowData");
+      return null;
+    }
+
+    console.log("🔍 Debug - getCashflowByType: cashflowData", cashflowData);
+
     const grouped = { Inflow: [], Outflow: [] };
     const officeFilter =
       activeTab === "analytics"
         ? selectedAnalyticsOffice
         : selectedCashflowOffice;
+
+    console.log("🔍 Debug - getCashflowByType: officeFilter", officeFilter);
+
     const filteredData = cashflowData.cashflowItems.filter((row) => {
       if (officeFilter === "all") return true;
       return row.Office === officeFilter;
     });
+
+    console.log("🔍 Debug - getCashflowByType: filteredData", filteredData);
+
+    // Use the actual "Inflow / Outflow" field from the data
     filteredData.forEach((row) => {
-      const type = row.Type;
-      if (grouped[type]) grouped[type].push(row);
+      const classValue = row.Class || "";
+      const account = row.Account || "";
+      const inflowOutflow = row["Inflow / Outflow"] || "";
+
+      console.log(
+        `🔍 Debug - Processing row: Class="${classValue}", Account="${account}", Inflow/Outflow="${inflowOutflow}"`
+      );
+
+      // Use the actual Inflow / Outflow field if available
+      let isInflow = false;
+      if (inflowOutflow) {
+        isInflow =
+          inflowOutflow.toLowerCase().includes("inflow") ||
+          inflowOutflow.toLowerCase().includes("cash inflow");
+      } else {
+        // Fallback to heuristic if no Inflow / Outflow field
+        isInflow =
+          classValue.toLowerCase().includes("revenue") ||
+          classValue.toLowerCase().includes("income") ||
+          classValue.toLowerCase().includes("receipt") ||
+          classValue.toLowerCase().includes("sales") ||
+          classValue.toLowerCase().includes("collection") ||
+          classValue.toLowerCase().includes("inflow") ||
+          classValue.toLowerCase().includes("credit") ||
+          account.toLowerCase().includes("revenue") ||
+          account.toLowerCase().includes("income") ||
+          account.toLowerCase().includes("receipt") ||
+          account.toLowerCase().includes("sales") ||
+          account.toLowerCase().includes("collection") ||
+          account.toLowerCase().includes("inflow") ||
+          account.toLowerCase().includes("credit") ||
+          account.toLowerCase().includes("deposit") ||
+          account.toLowerCase().includes("payment received");
+      }
+
+      console.log(
+        `🔍 Debug - Row categorized as: ${isInflow ? "Inflow" : "Outflow"}`
+      );
+
+      if (isInflow) {
+        grouped.Inflow.push(row);
+      } else {
+        grouped.Outflow.push(row);
+      }
     });
+
+    console.log("🔍 Debug - getCashflowByType: final grouped", grouped);
     return grouped;
   };
 
@@ -1429,22 +1604,43 @@ export default function PLDashboard() {
   };
 
   const getCashflowTotal = (type, month = null) => {
-    if (!cashflowByType || !cashflowByType[type]) return 0;
+    if (!cashflowByType || !cashflowByType[type]) {
+      console.log(`🔍 Debug - getCashflowTotal: No data for type ${type}`);
+      return 0;
+    }
+
+    console.log(
+      `🔍 Debug - getCashflowTotal for type ${type}:`,
+      cashflowByType[type]
+    );
+
     if (month) {
-      return cashflowByType[type].reduce(
-        (sum, row) => sum + parseValue(row[month.columnName]),
-        0
+      const total = cashflowByType[type].reduce((sum, row) => {
+        const value = parseValue(row[month.columnName]);
+        console.log(
+          `🔍 Debug - Row ${month.columnName}:`,
+          row[month.columnName],
+          "Parsed:",
+          value
+        );
+        return sum + value;
+      }, 0);
+      console.log(
+        `🔍 Debug - Total for ${type} in ${month.columnName}:`,
+        total
       );
+      return total;
     } else {
-      return cashflowByType[type].reduce(
-        (sum, row) =>
-          sum +
-          cashflowData.months.reduce(
-            (monthSum, month) => monthSum + parseValue(row[month.columnName]),
-            0
-          ),
-        0
-      );
+      const total = cashflowByType[type].reduce((sum, row) => {
+        const rowTotal = cashflowData.months.reduce(
+          (monthSum, month) => monthSum + parseValue(row[month.columnName]),
+          0
+        );
+        console.log(`🔍 Debug - Row total for ${type}:`, rowTotal);
+        return sum + rowTotal;
+      }, 0);
+      console.log(`🔍 Debug - Total for ${type} (all months):`, total);
+      return total;
     }
   };
 
@@ -2167,50 +2363,27 @@ export default function PLDashboard() {
 
         {activeTab === "pl" && (
           <div>
-            <div className="max-w-2xl mx-auto mb-6">
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl shadow-lg p-8 border-2 border-blue-200 text-center">
-                <div className="bg-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                  <FileText className="w-8 h-8 text-blue-600" />
+            {dashboardData &&
+              dashboardData.offices &&
+              dashboardData.offices.length > 0 && (
+                <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-indigo-200 mt-4">
+                  <h3 className="text-lg font-semibold mb-4">
+                    Filter by Office
+                  </h3>
+                  <select
+                    value={selectedOffice}
+                    onChange={(e) => setSelectedOffice(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                  >
+                    <option value="all">All Offices</option>
+                    {dashboardData.offices.map((office) => (
+                      <option key={office} value={office}>
+                        {office}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <h3 className="text-xl font-bold text-gray-800 mb-2">
-                  Data Managed by Administrator
-                </h3>
-                <p className="text-gray-600 mb-4">
-                  P&L data is uploaded and managed by your system administrator
-                  through the Data Management page.
-                </p>
-                {!dashboardData && (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
-                    <p className="text-sm text-yellow-800">
-                      <strong>📢 No data available yet.</strong> Please contact
-                      your administrator to upload the P&L CSV file.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {dashboardData &&
-                dashboardData.offices &&
-                dashboardData.offices.length > 0 && (
-                  <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-indigo-200 mt-4">
-                    <h3 className="text-lg font-semibold mb-4">
-                      Filter by Office
-                    </h3>
-                    <select
-                      value={selectedOffice}
-                      onChange={(e) => setSelectedOffice(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                    >
-                      <option value="all">All Offices</option>
-                      {dashboardData.offices.map((office) => (
-                        <option key={office} value={office}>
-                          {office}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-            </div>
+              )}
 
             {dashboardData && classifiedData && categorizedClasses && (
               <div>
@@ -2720,52 +2893,74 @@ export default function PLDashboard() {
 
         {activeTab === "cashflow" && (
           <div>
-            <div className="max-w-2xl mx-auto mb-6">
-              <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl shadow-lg p-8 border-2 border-green-200 text-center">
-                <div className="bg-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                  <TrendingUp className="w-8 h-8 text-green-600" />
-                </div>
-                <h3 className="text-xl font-bold text-gray-800 mb-2">
-                  Data Managed by Administrator
+            {/* Debug Information */}
+            {cashflowData && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                <h3 className="text-sm font-semibold text-yellow-800 mb-2">
+                  Debug Information:
                 </h3>
-                <p className="text-gray-600 mb-4">
-                  Cashflow data is uploaded and managed by your system
-                  administrator through the Data Management page.
-                </p>
-                {!cashflowData && (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
-                    <p className="text-sm text-yellow-800">
-                      <strong>📢 No data available yet.</strong> Please contact
-                      your administrator to upload the Cashflow CSV file.
-                    </p>
-                  </div>
-                )}
+                <div className="text-xs text-yellow-700">
+                  <p>
+                    Cashflow Items: {cashflowData.cashflowItems?.length || 0}
+                  </p>
+                  <p>Months: {cashflowData.months?.length || 0}</p>
+                  <p>Offices: {cashflowData.offices?.length || 0}</p>
+                  <p>Account Column: {cashflowData.accountColumn}</p>
+                  <p>
+                    Month Columns:{" "}
+                    {cashflowData.months?.map((m) => m.columnName).join(", ")}
+                  </p>
+                  {cashflowData.cashflowItems &&
+                    cashflowData.cashflowItems.length > 0 && (
+                      <div className="mt-2">
+                        <p>
+                          First Item:{" "}
+                          {JSON.stringify(cashflowData.cashflowItems[0])}
+                        </p>
+                        <p className="mt-1">
+                          Sample Values: June=
+                          {cashflowData.cashflowItems[0]["June"]}, July=
+                          {cashflowData.cashflowItems[0]["July"]}
+                        </p>
+                      </div>
+                    )}
+                </div>
               </div>
+            )}
 
-              {cashflowData &&
-                cashflowData.offices &&
-                cashflowData.offices.length > 0 && (
-                  <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-indigo-200 mt-4">
-                    <h3 className="text-lg font-semibold mb-4">
-                      Filter by Office
-                    </h3>
-                    <select
-                      value={selectedCashflowOffice}
-                      onChange={(e) =>
-                        setSelectedCashflowOffice(e.target.value)
-                      }
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                    >
-                      <option value="all">All Offices</option>
-                      {cashflowData.offices.map((office) => (
-                        <option key={office} value={office}>
-                          {office}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-            </div>
+            {cashflowData &&
+              cashflowData.offices &&
+              cashflowData.offices.length > 0 && (
+                <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-indigo-200 mt-4">
+                  <h3 className="text-lg font-semibold mb-4">
+                    Filter by Office
+                  </h3>
+                  <select
+                    value={selectedCashflowOffice}
+                    onChange={(e) => setSelectedCashflowOffice(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                  >
+                    <option value="all">All Offices</option>
+                    {cashflowData.offices.map((office) => (
+                      <option key={office} value={office}>
+                        {office}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+            {!cashflowData && (
+              <div className="bg-white rounded-2xl shadow-xl p-12 text-center">
+                <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-gray-600 mb-2">
+                  No Cashflow Data Available
+                </h3>
+                <p className="text-gray-500">
+                  Upload cashflow data to see the cashflow statement
+                </p>
+              </div>
+            )}
 
             {cashflowData && cashflowByType && (
               <div>
@@ -3065,52 +3260,27 @@ export default function PLDashboard() {
 
         {activeTab === "pipeline" && (
           <div>
-            <div className="max-w-2xl mx-auto mb-6">
-              <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl shadow-lg p-8 border-2 border-purple-200 text-center">
-                <div className="bg-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                  <BarChart3 className="w-8 h-8 text-purple-600" />
+            {pipelineData &&
+              pipelineData.offices &&
+              pipelineData.offices.length > 0 && (
+                <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-indigo-200 mt-4">
+                  <h3 className="text-lg font-semibold mb-4">
+                    Filter by Office
+                  </h3>
+                  <select
+                    value={selectedPipelineOffice}
+                    onChange={(e) => setSelectedPipelineOffice(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                  >
+                    <option value="all">All Offices</option>
+                    {pipelineData.offices.map((office) => (
+                      <option key={office} value={office}>
+                        {office}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <h3 className="text-xl font-bold text-gray-800 mb-2">
-                  Data Managed by Administrator
-                </h3>
-                <p className="text-gray-600 mb-4">
-                  Pipeline data is uploaded and managed by your system
-                  administrator through the Data Management page.
-                </p>
-                {!pipelineData && (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
-                    <p className="text-sm text-yellow-800">
-                      <strong>📢 No data available yet.</strong> Please contact
-                      your administrator to upload the Pipeline CSV file.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {pipelineData &&
-                pipelineData.offices &&
-                pipelineData.offices.length > 0 && (
-                  <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-indigo-200 mt-4">
-                    <h3 className="text-lg font-semibold mb-4">
-                      Filter by Office
-                    </h3>
-                    <select
-                      value={selectedPipelineOffice}
-                      onChange={(e) =>
-                        setSelectedPipelineOffice(e.target.value)
-                      }
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                    >
-                      <option value="all">All Offices</option>
-                      {pipelineData.offices.map((office) => (
-                        <option key={office} value={office}>
-                          {office}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-            </div>
+              )}
 
             {pipelineData && pipelineByStage && (
               <div className="bg-white rounded-2xl shadow-xl p-6">
@@ -5745,116 +5915,232 @@ export default function PLDashboard() {
 
         {activeTab === "sankey" && (
           <div>
-            <div className="max-w-3xl mx-auto mb-6">
-              <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-xl shadow-lg p-8 border-2 border-cyan-200 text-center">
-                <div className="bg-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                  <TrendingUp className="w-8 h-8 text-cyan-600" />
-                </div>
-                <h3 className="text-xl font-bold text-gray-800 mb-2">
-                  Data Managed by Administrator
-                </h3>
-                <p className="text-gray-600 mb-4">
-                  Cashflow Analysis data (SGD & USD) is uploaded and managed by
-                  your system administrator through the Data Management page.
-                </p>
-                {!sgdSankeyData && !usdSankeyData && (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
-                    <p className="text-sm text-yellow-800">
-                      <strong>📢 No data available yet.</strong> Please contact
-                      your administrator to upload the SGD and/or USD Cashflow
-                      Analysis CSV files.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-
             {/* SGD Tabular Cashflow */}
             {sgdSankeyData &&
+              sgdSankeyData.cashflowItems &&
+              sgdSankeyData.cashflowItems.length > 0 &&
               (() => {
-                const totalInflow = sgdSankeyData.cashflowItems
-                  .filter((item) => item.Type === "Inflow")
-                  .reduce((sum, item) => sum + item.Amount, 0);
+                try {
+                  const totalInflow = sgdSankeyData.cashflowItems
+                    .filter((item) => item.Type === "Inflow")
+                    .reduce((sum, item) => sum + (item.Amount || 0), 0);
 
-                const totalOutflow = sgdSankeyData.cashflowItems
-                  .filter((item) => item.Type === "Outflow")
-                  .reduce((sum, item) => sum + item.Amount, 0);
+                  const totalOutflow = sgdSankeyData.cashflowItems
+                    .filter((item) => item.Type === "Outflow")
+                    .reduce((sum, item) => sum + (item.Amount || 0), 0);
 
-                const closingBalance =
-                  sgdOpeningBalance + totalInflow - totalOutflow;
-                const totalAvailable = sgdOpeningBalance + totalInflow;
+                  const closingBalance =
+                    sgdOpeningBalance + totalInflow - totalOutflow;
+                  const totalAvailable = sgdOpeningBalance + totalInflow;
 
-                // Group inflows by category
-                const inflowsByCategory = {};
-                sgdSankeyData.cashflowItems
-                  .filter((item) => item.Type === "Inflow")
-                  .forEach((item) => {
-                    if (!inflowsByCategory[item.Category]) {
-                      inflowsByCategory[item.Category] = [];
-                    }
-                    inflowsByCategory[item.Category].push(item);
-                  });
+                  // Group inflows by category
+                  const inflowsByCategory = {};
+                  sgdSankeyData.cashflowItems
+                    .filter((item) => item.Type === "Inflow")
+                    .forEach((item) => {
+                      const category = item.Category || "Uncategorized";
+                      if (!inflowsByCategory[category]) {
+                        inflowsByCategory[category] = [];
+                      }
+                      inflowsByCategory[category].push(item);
+                    });
 
-                // Group outflows by category
-                const outflowsByCategory = {};
-                sgdSankeyData.cashflowItems
-                  .filter((item) => item.Type === "Outflow")
-                  .forEach((item) => {
-                    if (!outflowsByCategory[item.Category]) {
-                      outflowsByCategory[item.Category] = [];
-                    }
-                    outflowsByCategory[item.Category].push(item);
-                  });
+                  // Group outflows by category
+                  const outflowsByCategory = {};
+                  sgdSankeyData.cashflowItems
+                    .filter((item) => item.Type === "Outflow")
+                    .forEach((item) => {
+                      const category = item.Category || "Uncategorized";
+                      if (!outflowsByCategory[category]) {
+                        outflowsByCategory[category] = [];
+                      }
+                      outflowsByCategory[category].push(item);
+                    });
 
-                return (
-                  <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-gray-200">
-                    <h2 className="text-lg font-bold mb-6 text-green-700 pb-3 border-b-2 border-green-200">
-                      SGD Cashflow Analysis
-                    </h2>
+                  return (
+                    <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-gray-200">
+                      <h2 className="text-lg font-bold mb-6 text-green-700 pb-3 border-b-2 border-green-200">
+                        SGD Cashflow Analysis
+                      </h2>
 
-                    <div className="grid grid-cols-12 gap-6 items-start">
-                      {/* Column 1: Opening Balance & Inflows */}
-                      <div className="col-span-3 space-y-3">
-                        <div className="bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl shadow-lg p-3 text-white">
-                          <h3 className="text-[10px] font-bold mb-1 uppercase tracking-wider opacity-90">
-                            Opening Balance
-                          </h3>
-                          <p className="text-base font-bold">
-                            {formatCurrency(sgdOpeningBalance)}
-                          </p>
+                      <div className="grid grid-cols-12 gap-6 items-start">
+                        {/* Column 1: Opening Balance & Inflows */}
+                        <div className="col-span-3 space-y-3">
+                          <div className="bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl shadow-lg p-3 text-white">
+                            <h3 className="text-[10px] font-bold mb-1 uppercase tracking-wider opacity-90">
+                              Opening Balance
+                            </h3>
+                            <p className="text-base font-bold">
+                              {formatCurrency(sgdOpeningBalance)}
+                            </p>
+                          </div>
+
+                          <div className="space-y-2 mt-4">
+                            <h3 className="text-[10px] font-bold text-gray-600 uppercase tracking-wider pb-1 border-b border-gray-300">
+                              Cash Inflows
+                            </h3>
+                            {Object.entries(inflowsByCategory).map(
+                              ([category, items]) => {
+                                const categoryTotal = items.reduce(
+                                  (sum, item) => sum + item.Amount,
+                                  0
+                                );
+                                const percentage =
+                                  totalInflow > 0
+                                    ? (
+                                        (categoryTotal / totalInflow) *
+                                        100
+                                      ).toFixed(1)
+                                    : 0;
+                                return (
+                                  <div
+                                    key={category}
+                                    className="bg-blue-50 rounded-lg p-2 border border-blue-200 hover:shadow-md transition-shadow"
+                                  >
+                                    <div className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide mb-0.5">
+                                      {category}
+                                    </div>
+                                    <div className="flex items-baseline justify-between gap-2">
+                                      <div className="text-sm font-bold text-blue-900">
+                                        {formatCurrency(categoryTotal)}
+                                      </div>
+                                      <div className="text-[10px] text-blue-600 font-semibold">
+                                        {percentage}%
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                            )}
+                          </div>
                         </div>
 
-                        <div className="space-y-2 mt-4">
+                        {/* Column 2: Total Inflows */}
+                        <div className="col-span-2 flex flex-col items-center justify-center py-6">
+                          <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-2xl p-4 text-white text-center w-full">
+                            <h3 className="text-[10px] font-bold mb-2 uppercase tracking-wider opacity-90">
+                              Total Inflows
+                            </h3>
+                            <p className="text-xl font-bold">
+                              {formatCurrency(totalAvailable)}
+                            </p>
+                          </div>
+                          <div className="my-4">
+                            <div className="text-3xl text-red-500 font-bold animate-pulse">
+                              →
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Column 3: Outflows with arrows to detailed breakdown */}
+                        <div className="col-span-7 space-y-4">
                           <h3 className="text-[10px] font-bold text-gray-600 uppercase tracking-wider pb-1 border-b border-gray-300">
-                            Cash Inflows
+                            Cash Outflows → Detailed Breakdown
                           </h3>
-                          {Object.entries(inflowsByCategory).map(
+                          {Object.entries(outflowsByCategory).map(
                             ([category, items]) => {
                               const categoryTotal = items.reduce(
                                 (sum, item) => sum + item.Amount,
                                 0
                               );
                               const percentage =
-                                totalInflow > 0
+                                totalAvailable > 0
                                   ? (
-                                      (categoryTotal / totalInflow) *
+                                      (categoryTotal / totalAvailable) *
                                       100
                                     ).toFixed(1)
                                   : 0;
+
+                              // Group by contact and sum amounts
+                              const contactTotals = {};
+                              items.forEach((item) => {
+                                if (!contactTotals[item.Contact]) {
+                                  contactTotals[item.Contact] = 0;
+                                }
+                                contactTotals[item.Contact] += item.Amount;
+                              });
+
                               return (
                                 <div
                                   key={category}
-                                  className="bg-blue-50 rounded-lg p-2 border border-blue-200 hover:shadow-md transition-shadow"
+                                  className="flex items-start gap-3"
                                 >
-                                  <div className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide mb-0.5">
-                                    {category}
-                                  </div>
-                                  <div className="flex items-baseline justify-between gap-2">
-                                    <div className="text-sm font-bold text-blue-900">
+                                  {/* Outflow Summary */}
+                                  <div className="flex-shrink-0 w-64 bg-green-50 rounded-lg p-2 border-l-4 border-orange-500 hover:shadow-md transition-shadow">
+                                    <div className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide">
+                                      {category}
+                                    </div>
+                                    <div className="text-sm font-bold text-gray-900 mt-0.5">
                                       {formatCurrency(categoryTotal)}
                                     </div>
-                                    <div className="text-[10px] text-blue-600 font-semibold">
+                                    <div className="text-[10px] text-gray-500 mt-0.5 font-medium">
                                       {percentage}%
+                                    </div>
+                                  </div>
+
+                                  {/* Curved Arrow */}
+                                  <div className="flex-shrink-0 flex items-center justify-center pt-4">
+                                    <svg
+                                      width="40"
+                                      height="40"
+                                      viewBox="0 0 40 40"
+                                      className="text-green-500"
+                                    >
+                                      <path
+                                        d="M 5 20 Q 20 20, 30 20"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        fill="none"
+                                        markerEnd="url(#arrowhead)"
+                                      />
+                                      <defs>
+                                        <marker
+                                          id="arrowhead"
+                                          markerWidth="10"
+                                          markerHeight="10"
+                                          refX="9"
+                                          refY="3"
+                                          orient="auto"
+                                        >
+                                          <polygon
+                                            points="0 0, 10 3, 0 6"
+                                            fill="currentColor"
+                                          />
+                                        </marker>
+                                      </defs>
+                                    </svg>
+                                  </div>
+
+                                  {/* Detailed Breakdown */}
+                                  <div className="flex-1">
+                                    <div className="grid grid-cols-2 gap-2">
+                                      {Object.entries(contactTotals).map(
+                                        ([contact, total], idx) => {
+                                          const contactPercentage =
+                                            categoryTotal > 0
+                                              ? (
+                                                  (total / categoryTotal) *
+                                                  100
+                                                ).toFixed(1)
+                                              : 0;
+                                          return (
+                                            <div
+                                              key={`${category}-${idx}`}
+                                              className="bg-white rounded-lg p-2 border border-gray-200 hover:border-gray-300 hover:shadow transition-all"
+                                            >
+                                              <div className="text-[10px] text-gray-600 mb-0.5">
+                                                {contact}
+                                              </div>
+                                              <div className="text-xs font-bold text-gray-900">
+                                                {formatCurrency(total)}
+                                              </div>
+                                              <div className="text-[9px] text-gray-500 mt-0.5">
+                                                {contactPercentage}%
+                                              </div>
+                                            </div>
+                                          );
+                                        }
+                                      )}
                                     </div>
                                   </div>
                                 </div>
@@ -5864,272 +6150,294 @@ export default function PLDashboard() {
                         </div>
                       </div>
 
-                      {/* Column 2: Total Inflows */}
-                      <div className="col-span-2 flex flex-col items-center justify-center py-6">
-                        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-2xl p-4 text-white text-center w-full">
-                          <h3 className="text-[10px] font-bold mb-2 uppercase tracking-wider opacity-90">
+                      {/* Bottom Summary */}
+                      <div className="grid grid-cols-4 gap-4 mt-8 pt-6 border-t-2 border-gray-200">
+                        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow-lg p-4 border-2 border-green-300">
+                          <h3 className="text-[10px] font-bold text-green-700 uppercase tracking-wide mb-1">
                             Total Inflows
                           </h3>
-                          <p className="text-xl font-bold">
-                            {formatCurrency(totalAvailable)}
+                          <p className="text-lg font-bold text-green-900">
+                            {formatCurrency(totalInflow)}
                           </p>
                         </div>
-                        <div className="my-4">
-                          <div className="text-3xl text-red-500 font-bold animate-pulse">
-                            →
-                          </div>
+                        <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow-lg p-4 border-2 border-red-300">
+                          <h3 className="text-[10px] font-bold text-red-700 uppercase tracking-wide mb-1">
+                            Total Outflows
+                          </h3>
+                          <p className="text-lg font-bold text-red-900">
+                            {formatCurrency(totalOutflow)}
+                          </p>
+                        </div>
+                        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-lg p-4 border-2 border-blue-300">
+                          <h3 className="text-[10px] font-bold text-blue-700 uppercase tracking-wide mb-1">
+                            Net Change
+                          </h3>
+                          <p
+                            className={`text-lg font-bold ${
+                              totalInflow - totalOutflow >= 0
+                                ? "text-green-700"
+                                : "text-red-700"
+                            }`}
+                          >
+                            {formatCurrency(totalInflow - totalOutflow)}
+                          </p>
+                        </div>
+                        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow-lg p-4 border-2 border-purple-300">
+                          <h3 className="text-[10px] font-bold text-purple-700 uppercase tracking-wide mb-1">
+                            Closing Balance
+                          </h3>
+                          <p className="text-lg font-bold text-purple-900">
+                            {formatCurrency(closingBalance)}
+                          </p>
                         </div>
                       </div>
-
-                      {/* Column 3: Outflows with arrows to detailed breakdown */}
-                      <div className="col-span-7 space-y-4">
-                        <h3 className="text-[10px] font-bold text-gray-600 uppercase tracking-wider pb-1 border-b border-gray-300">
-                          Cash Outflows → Detailed Breakdown
-                        </h3>
-                        {Object.entries(outflowsByCategory).map(
-                          ([category, items]) => {
-                            const categoryTotal = items.reduce(
-                              (sum, item) => sum + item.Amount,
-                              0
-                            );
-                            const percentage =
-                              totalAvailable > 0
-                                ? (
-                                    (categoryTotal / totalAvailable) *
-                                    100
-                                  ).toFixed(1)
-                                : 0;
-
-                            // Group by contact and sum amounts
-                            const contactTotals = {};
-                            items.forEach((item) => {
-                              if (!contactTotals[item.Contact]) {
-                                contactTotals[item.Contact] = 0;
-                              }
-                              contactTotals[item.Contact] += item.Amount;
-                            });
-
-                            return (
-                              <div
-                                key={category}
-                                className="flex items-start gap-3"
-                              >
-                                {/* Outflow Summary */}
-                                <div className="flex-shrink-0 w-64 bg-green-50 rounded-lg p-2 border-l-4 border-orange-500 hover:shadow-md transition-shadow">
-                                  <div className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide">
-                                    {category}
-                                  </div>
-                                  <div className="text-sm font-bold text-gray-900 mt-0.5">
-                                    {formatCurrency(categoryTotal)}
-                                  </div>
-                                  <div className="text-[10px] text-gray-500 mt-0.5 font-medium">
-                                    {percentage}%
-                                  </div>
-                                </div>
-
-                                {/* Curved Arrow */}
-                                <div className="flex-shrink-0 flex items-center justify-center pt-4">
-                                  <svg
-                                    width="40"
-                                    height="40"
-                                    viewBox="0 0 40 40"
-                                    className="text-green-500"
-                                  >
-                                    <path
-                                      d="M 5 20 Q 20 20, 30 20"
-                                      stroke="currentColor"
-                                      strokeWidth="2"
-                                      fill="none"
-                                      markerEnd="url(#arrowhead)"
-                                    />
-                                    <defs>
-                                      <marker
-                                        id="arrowhead"
-                                        markerWidth="10"
-                                        markerHeight="10"
-                                        refX="9"
-                                        refY="3"
-                                        orient="auto"
-                                      >
-                                        <polygon
-                                          points="0 0, 10 3, 0 6"
-                                          fill="currentColor"
-                                        />
-                                      </marker>
-                                    </defs>
-                                  </svg>
-                                </div>
-
-                                {/* Detailed Breakdown */}
-                                <div className="flex-1">
-                                  <div className="grid grid-cols-2 gap-2">
-                                    {Object.entries(contactTotals).map(
-                                      ([contact, total], idx) => {
-                                        const contactPercentage =
-                                          categoryTotal > 0
-                                            ? (
-                                                (total / categoryTotal) *
-                                                100
-                                              ).toFixed(1)
-                                            : 0;
-                                        return (
-                                          <div
-                                            key={`${category}-${idx}`}
-                                            className="bg-white rounded-lg p-2 border border-gray-200 hover:border-gray-300 hover:shadow transition-all"
-                                          >
-                                            <div className="text-[10px] text-gray-600 mb-0.5">
-                                              {contact}
-                                            </div>
-                                            <div className="text-xs font-bold text-gray-900">
-                                              {formatCurrency(total)}
-                                            </div>
-                                            <div className="text-[9px] text-gray-500 mt-0.5">
-                                              {contactPercentage}%
-                                            </div>
-                                          </div>
-                                        );
-                                      }
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          }
-                        )}
-                      </div>
                     </div>
-
-                    {/* Bottom Summary */}
-                    <div className="grid grid-cols-4 gap-4 mt-8 pt-6 border-t-2 border-gray-200">
-                      <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow-lg p-4 border-2 border-green-300">
-                        <h3 className="text-[10px] font-bold text-green-700 uppercase tracking-wide mb-1">
-                          Total Inflows
-                        </h3>
-                        <p className="text-lg font-bold text-green-900">
-                          {formatCurrency(totalInflow)}
-                        </p>
-                      </div>
-                      <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow-lg p-4 border-2 border-red-300">
-                        <h3 className="text-[10px] font-bold text-red-700 uppercase tracking-wide mb-1">
-                          Total Outflows
-                        </h3>
-                        <p className="text-lg font-bold text-red-900">
-                          {formatCurrency(totalOutflow)}
-                        </p>
-                      </div>
-                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-lg p-4 border-2 border-blue-300">
-                        <h3 className="text-[10px] font-bold text-blue-700 uppercase tracking-wide mb-1">
-                          Net Change
-                        </h3>
-                        <p
-                          className={`text-lg font-bold ${
-                            totalInflow - totalOutflow >= 0
-                              ? "text-green-700"
-                              : "text-red-700"
-                          }`}
-                        >
-                          {formatCurrency(totalInflow - totalOutflow)}
-                        </p>
-                      </div>
-                      <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow-lg p-4 border-2 border-purple-300">
-                        <h3 className="text-[10px] font-bold text-purple-700 uppercase tracking-wide mb-1">
-                          Closing Balance
-                        </h3>
-                        <p className="text-lg font-bold text-purple-900">
-                          {formatCurrency(closingBalance)}
-                        </p>
-                      </div>
+                  );
+                } catch (error) {
+                  console.error(
+                    "Error rendering SGD cashflow analysis:",
+                    error
+                  );
+                  return (
+                    <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-gray-200">
+                      <h2 className="text-lg font-bold mb-6 text-red-700 pb-3 border-b-2 border-red-200">
+                        SGD Cashflow Analysis - Error
+                      </h2>
+                      <p className="text-red-600">
+                        Error loading SGD cashflow data. Please check the data
+                        format.
+                      </p>
                     </div>
-                  </div>
-                );
+                  );
+                }
               })()}
 
             {/* USD Tabular Cashflow */}
             {usdSankeyData &&
+              usdSankeyData.cashflowItems &&
+              usdSankeyData.cashflowItems.length > 0 &&
               (() => {
-                const totalInflow = usdSankeyData.cashflowItems
-                  .filter((item) => item.Type === "Inflow")
-                  .reduce((sum, item) => sum + item.Amount, 0);
+                try {
+                  const totalInflow = usdSankeyData.cashflowItems
+                    .filter((item) => item.Type === "Inflow")
+                    .reduce((sum, item) => sum + (item.Amount || 0), 0);
 
-                const totalOutflow = usdSankeyData.cashflowItems
-                  .filter((item) => item.Type === "Outflow")
-                  .reduce((sum, item) => sum + item.Amount, 0);
+                  const totalOutflow = usdSankeyData.cashflowItems
+                    .filter((item) => item.Type === "Outflow")
+                    .reduce((sum, item) => sum + (item.Amount || 0), 0);
 
-                const closingBalance =
-                  usdOpeningBalance + totalInflow - totalOutflow;
-                const totalAvailable = usdOpeningBalance + totalInflow;
+                  const closingBalance =
+                    usdOpeningBalance + totalInflow - totalOutflow;
+                  const totalAvailable = usdOpeningBalance + totalInflow;
 
-                // Group inflows by category
-                const inflowsByCategory = {};
-                usdSankeyData.cashflowItems
-                  .filter((item) => item.Type === "Inflow")
-                  .forEach((item) => {
-                    if (!inflowsByCategory[item.Category]) {
-                      inflowsByCategory[item.Category] = [];
-                    }
-                    inflowsByCategory[item.Category].push(item);
-                  });
+                  // Group inflows by category
+                  const inflowsByCategory = {};
+                  usdSankeyData.cashflowItems
+                    .filter((item) => item.Type === "Inflow")
+                    .forEach((item) => {
+                      const category = item.Category || "Uncategorized";
+                      if (!inflowsByCategory[category]) {
+                        inflowsByCategory[category] = [];
+                      }
+                      inflowsByCategory[category].push(item);
+                    });
 
-                // Group outflows by category
-                const outflowsByCategory = {};
-                usdSankeyData.cashflowItems
-                  .filter((item) => item.Type === "Outflow")
-                  .forEach((item) => {
-                    if (!outflowsByCategory[item.Category]) {
-                      outflowsByCategory[item.Category] = [];
-                    }
-                    outflowsByCategory[item.Category].push(item);
-                  });
+                  // Group outflows by category
+                  const outflowsByCategory = {};
+                  usdSankeyData.cashflowItems
+                    .filter((item) => item.Type === "Outflow")
+                    .forEach((item) => {
+                      const category = item.Category || "Uncategorized";
+                      if (!outflowsByCategory[category]) {
+                        outflowsByCategory[category] = [];
+                      }
+                      outflowsByCategory[category].push(item);
+                    });
 
-                return (
-                  <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-gray-200">
-                    <h2 className="text-lg font-bold mb-6 text-blue-700 pb-3 border-b-2 border-blue-200">
-                      USD Cashflow Analysis
-                    </h2>
+                  return (
+                    <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-gray-200">
+                      <h2 className="text-lg font-bold mb-6 text-blue-700 pb-3 border-b-2 border-blue-200">
+                        USD Cashflow Analysis
+                      </h2>
 
-                    <div className="grid grid-cols-12 gap-6 items-start">
-                      {/* Column 1: Opening Balance & Inflows */}
-                      <div className="col-span-3 space-y-3">
-                        <div className="bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl shadow-lg p-3 text-white">
-                          <h3 className="text-[10px] font-bold mb-1 uppercase tracking-wider opacity-90">
-                            Opening Balance
-                          </h3>
-                          <p className="text-base font-bold">
-                            {formatCurrency(usdOpeningBalance)}
-                          </p>
+                      <div className="grid grid-cols-12 gap-6 items-start">
+                        {/* Column 1: Opening Balance & Inflows */}
+                        <div className="col-span-3 space-y-3">
+                          <div className="bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl shadow-lg p-3 text-white">
+                            <h3 className="text-[10px] font-bold mb-1 uppercase tracking-wider opacity-90">
+                              Opening Balance
+                            </h3>
+                            <p className="text-base font-bold">
+                              {formatCurrency(usdOpeningBalance)}
+                            </p>
+                          </div>
+
+                          <div className="space-y-2 mt-4">
+                            <h3 className="text-[10px] font-bold text-gray-600 uppercase tracking-wider pb-1 border-b border-gray-300">
+                              Cash Inflows
+                            </h3>
+                            {Object.entries(inflowsByCategory).map(
+                              ([category, items]) => {
+                                const categoryTotal = items.reduce(
+                                  (sum, item) => sum + item.Amount,
+                                  0
+                                );
+                                const percentage =
+                                  totalInflow > 0
+                                    ? (
+                                        (categoryTotal / totalInflow) *
+                                        100
+                                      ).toFixed(1)
+                                    : 0;
+                                return (
+                                  <div
+                                    key={category}
+                                    className="bg-blue-50 rounded-lg p-2 border border-blue-200 hover:shadow-md transition-shadow"
+                                  >
+                                    <div className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide mb-0.5">
+                                      {category}
+                                    </div>
+                                    <div className="flex items-baseline justify-between gap-2">
+                                      <div className="text-sm font-bold text-blue-900">
+                                        {formatCurrency(categoryTotal)}
+                                      </div>
+                                      <div className="text-[10px] text-blue-600 font-semibold">
+                                        {percentage}%
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                            )}
+                          </div>
                         </div>
 
-                        <div className="space-y-2 mt-4">
+                        {/* Column 2: Total Inflows */}
+                        <div className="col-span-2 flex flex-col items-center justify-center py-6">
+                          <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-2xl p-4 text-white text-center w-full">
+                            <h3 className="text-[10px] font-bold mb-2 uppercase tracking-wider opacity-90">
+                              Total Inflows
+                            </h3>
+                            <p className="text-xl font-bold">
+                              {formatCurrency(totalAvailable)}
+                            </p>
+                          </div>
+                          <div className="my-4">
+                            <div className="text-3xl text-red-500 font-bold animate-pulse">
+                              →
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Column 3: Outflows with arrows to detailed breakdown */}
+                        <div className="col-span-7 space-y-4">
                           <h3 className="text-[10px] font-bold text-gray-600 uppercase tracking-wider pb-1 border-b border-gray-300">
-                            Cash Inflows
+                            Cash Outflows → Detailed Breakdown
                           </h3>
-                          {Object.entries(inflowsByCategory).map(
+                          {Object.entries(outflowsByCategory).map(
                             ([category, items]) => {
                               const categoryTotal = items.reduce(
                                 (sum, item) => sum + item.Amount,
                                 0
                               );
                               const percentage =
-                                totalInflow > 0
+                                totalAvailable > 0
                                   ? (
-                                      (categoryTotal / totalInflow) *
+                                      (categoryTotal / totalAvailable) *
                                       100
                                     ).toFixed(1)
                                   : 0;
+
+                              // Group by contact and sum amounts
+                              const contactTotals = {};
+                              items.forEach((item) => {
+                                if (!contactTotals[item.Contact]) {
+                                  contactTotals[item.Contact] = 0;
+                                }
+                                contactTotals[item.Contact] += item.Amount;
+                              });
+
                               return (
                                 <div
                                   key={category}
-                                  className="bg-blue-50 rounded-lg p-2 border border-blue-200 hover:shadow-md transition-shadow"
+                                  className="flex items-start gap-3"
                                 >
-                                  <div className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide mb-0.5">
-                                    {category}
-                                  </div>
-                                  <div className="flex items-baseline justify-between gap-2">
-                                    <div className="text-sm font-bold text-blue-900">
+                                  {/* Outflow Summary */}
+                                  <div className="flex-shrink-0 w-64 bg-green-50 rounded-lg p-2 border-l-4 border-orange-500 hover:shadow-md transition-shadow">
+                                    <div className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide">
+                                      {category}
+                                    </div>
+                                    <div className="text-sm font-bold text-gray-900 mt-0.5">
                                       {formatCurrency(categoryTotal)}
                                     </div>
-                                    <div className="text-[10px] text-blue-600 font-semibold">
+                                    <div className="text-[10px] text-gray-500 mt-0.5 font-medium">
                                       {percentage}%
+                                    </div>
+                                  </div>
+
+                                  {/* Curved Arrow */}
+                                  <div className="flex-shrink-0 flex items-center justify-center pt-4">
+                                    <svg
+                                      width="40"
+                                      height="40"
+                                      viewBox="0 0 40 40"
+                                      className="text-green-500"
+                                    >
+                                      <path
+                                        d="M 5 20 Q 20 20, 30 20"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        fill="none"
+                                        markerEnd="url(#arrowhead-usd)"
+                                      />
+                                      <defs>
+                                        <marker
+                                          id="arrowhead-usd"
+                                          markerWidth="10"
+                                          markerHeight="10"
+                                          refX="9"
+                                          refY="3"
+                                          orient="auto"
+                                        >
+                                          <polygon
+                                            points="0 0, 10 3, 0 6"
+                                            fill="currentColor"
+                                          />
+                                        </marker>
+                                      </defs>
+                                    </svg>
+                                  </div>
+
+                                  {/* Detailed Breakdown */}
+                                  <div className="flex-1">
+                                    <div className="grid grid-cols-2 gap-2">
+                                      {Object.entries(contactTotals).map(
+                                        ([contact, total], idx) => {
+                                          const contactPercentage =
+                                            categoryTotal > 0
+                                              ? (
+                                                  (total / categoryTotal) *
+                                                  100
+                                                ).toFixed(1)
+                                              : 0;
+                                          return (
+                                            <div
+                                              key={`${category}-${idx}`}
+                                              className="bg-white rounded-lg p-2 border border-gray-200 hover:border-gray-300 hover:shadow transition-all"
+                                            >
+                                              <div className="text-[10px] text-gray-600 mb-0.5">
+                                                {contact}
+                                              </div>
+                                              <div className="text-xs font-bold text-gray-900">
+                                                {formatCurrency(total)}
+                                              </div>
+                                              <div className="text-[9px] text-gray-500 mt-0.5">
+                                                {contactPercentage}%
+                                              </div>
+                                            </div>
+                                          );
+                                        }
+                                      )}
                                     </div>
                                   </div>
                                 </div>
@@ -6139,282 +6447,304 @@ export default function PLDashboard() {
                         </div>
                       </div>
 
-                      {/* Column 2: Total Inflows */}
-                      <div className="col-span-2 flex flex-col items-center justify-center py-6">
-                        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-2xl p-4 text-white text-center w-full">
-                          <h3 className="text-[10px] font-bold mb-2 uppercase tracking-wider opacity-90">
+                      {/* Bottom Summary */}
+                      <div className="grid grid-cols-4 gap-4 mt-8 pt-6 border-t-2 border-gray-200">
+                        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow-lg p-4 border-2 border-green-300">
+                          <h3 className="text-[10px] font-bold text-green-700 uppercase tracking-wide mb-1">
                             Total Inflows
                           </h3>
-                          <p className="text-xl font-bold">
-                            {formatCurrency(totalAvailable)}
+                          <p className="text-lg font-bold text-green-900">
+                            {formatCurrency(totalInflow)}
                           </p>
                         </div>
-                        <div className="my-4">
-                          <div className="text-3xl text-red-500 font-bold animate-pulse">
-                            →
-                          </div>
+                        <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow-lg p-4 border-2 border-red-300">
+                          <h3 className="text-[10px] font-bold text-red-700 uppercase tracking-wide mb-1">
+                            Total Outflows
+                          </h3>
+                          <p className="text-lg font-bold text-red-900">
+                            {formatCurrency(totalOutflow)}
+                          </p>
+                        </div>
+                        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-lg p-4 border-2 border-blue-300">
+                          <h3 className="text-[10px] font-bold text-blue-700 uppercase tracking-wide mb-1">
+                            Net Change
+                          </h3>
+                          <p
+                            className={`text-lg font-bold ${
+                              totalInflow - totalOutflow >= 0
+                                ? "text-green-700"
+                                : "text-red-700"
+                            }`}
+                          >
+                            {formatCurrency(totalInflow - totalOutflow)}
+                          </p>
+                        </div>
+                        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow-lg p-4 border-2 border-purple-300">
+                          <h3 className="text-[10px] font-bold text-purple-700 uppercase tracking-wide mb-1">
+                            Closing Balance
+                          </h3>
+                          <p className="text-lg font-bold text-purple-900">
+                            {formatCurrency(closingBalance)}
+                          </p>
                         </div>
                       </div>
-
-                      {/* Column 3: Outflows with arrows to detailed breakdown */}
-                      <div className="col-span-7 space-y-4">
-                        <h3 className="text-[10px] font-bold text-gray-600 uppercase tracking-wider pb-1 border-b border-gray-300">
-                          Cash Outflows → Detailed Breakdown
-                        </h3>
-                        {Object.entries(outflowsByCategory).map(
-                          ([category, items]) => {
-                            const categoryTotal = items.reduce(
-                              (sum, item) => sum + item.Amount,
-                              0
-                            );
-                            const percentage =
-                              totalAvailable > 0
-                                ? (
-                                    (categoryTotal / totalAvailable) *
-                                    100
-                                  ).toFixed(1)
-                                : 0;
-
-                            // Group by contact and sum amounts
-                            const contactTotals = {};
-                            items.forEach((item) => {
-                              if (!contactTotals[item.Contact]) {
-                                contactTotals[item.Contact] = 0;
-                              }
-                              contactTotals[item.Contact] += item.Amount;
-                            });
-
-                            return (
-                              <div
-                                key={category}
-                                className="flex items-start gap-3"
-                              >
-                                {/* Outflow Summary */}
-                                <div className="flex-shrink-0 w-64 bg-green-50 rounded-lg p-2 border-l-4 border-orange-500 hover:shadow-md transition-shadow">
-                                  <div className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide">
-                                    {category}
-                                  </div>
-                                  <div className="text-sm font-bold text-gray-900 mt-0.5">
-                                    {formatCurrency(categoryTotal)}
-                                  </div>
-                                  <div className="text-[10px] text-gray-500 mt-0.5 font-medium">
-                                    {percentage}%
-                                  </div>
-                                </div>
-
-                                {/* Curved Arrow */}
-                                <div className="flex-shrink-0 flex items-center justify-center pt-4">
-                                  <svg
-                                    width="40"
-                                    height="40"
-                                    viewBox="0 0 40 40"
-                                    className="text-green-500"
-                                  >
-                                    <path
-                                      d="M 5 20 Q 20 20, 30 20"
-                                      stroke="currentColor"
-                                      strokeWidth="2"
-                                      fill="none"
-                                      markerEnd="url(#arrowhead-usd)"
-                                    />
-                                    <defs>
-                                      <marker
-                                        id="arrowhead-usd"
-                                        markerWidth="10"
-                                        markerHeight="10"
-                                        refX="9"
-                                        refY="3"
-                                        orient="auto"
-                                      >
-                                        <polygon
-                                          points="0 0, 10 3, 0 6"
-                                          fill="currentColor"
-                                        />
-                                      </marker>
-                                    </defs>
-                                  </svg>
-                                </div>
-
-                                {/* Detailed Breakdown */}
-                                <div className="flex-1">
-                                  <div className="grid grid-cols-2 gap-2">
-                                    {Object.entries(contactTotals).map(
-                                      ([contact, total], idx) => {
-                                        const contactPercentage =
-                                          categoryTotal > 0
-                                            ? (
-                                                (total / categoryTotal) *
-                                                100
-                                              ).toFixed(1)
-                                            : 0;
-                                        return (
-                                          <div
-                                            key={`${category}-${idx}`}
-                                            className="bg-white rounded-lg p-2 border border-gray-200 hover:border-gray-300 hover:shadow transition-all"
-                                          >
-                                            <div className="text-[10px] text-gray-600 mb-0.5">
-                                              {contact}
-                                            </div>
-                                            <div className="text-xs font-bold text-gray-900">
-                                              {formatCurrency(total)}
-                                            </div>
-                                            <div className="text-[9px] text-gray-500 mt-0.5">
-                                              {contactPercentage}%
-                                            </div>
-                                          </div>
-                                        );
-                                      }
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          }
-                        )}
-                      </div>
                     </div>
-
-                    {/* Bottom Summary */}
-                    <div className="grid grid-cols-4 gap-4 mt-8 pt-6 border-t-2 border-gray-200">
-                      <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow-lg p-4 border-2 border-green-300">
-                        <h3 className="text-[10px] font-bold text-green-700 uppercase tracking-wide mb-1">
-                          Total Inflows
-                        </h3>
-                        <p className="text-lg font-bold text-green-900">
-                          {formatCurrency(totalInflow)}
-                        </p>
-                      </div>
-                      <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow-lg p-4 border-2 border-red-300">
-                        <h3 className="text-[10px] font-bold text-red-700 uppercase tracking-wide mb-1">
-                          Total Outflows
-                        </h3>
-                        <p className="text-lg font-bold text-red-900">
-                          {formatCurrency(totalOutflow)}
-                        </p>
-                      </div>
-                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-lg p-4 border-2 border-blue-300">
-                        <h3 className="text-[10px] font-bold text-blue-700 uppercase tracking-wide mb-1">
-                          Net Change
-                        </h3>
-                        <p
-                          className={`text-lg font-bold ${
-                            totalInflow - totalOutflow >= 0
-                              ? "text-green-700"
-                              : "text-red-700"
-                          }`}
-                        >
-                          {formatCurrency(totalInflow - totalOutflow)}
-                        </p>
-                      </div>
-                      <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow-lg p-4 border-2 border-purple-300">
-                        <h3 className="text-[10px] font-bold text-purple-700 uppercase tracking-wide mb-1">
-                          Closing Balance
-                        </h3>
-                        <p className="text-lg font-bold text-purple-900">
-                          {formatCurrency(closingBalance)}
-                        </p>
-                      </div>
+                  );
+                } catch (error) {
+                  console.error(
+                    "Error rendering USD cashflow analysis:",
+                    error
+                  );
+                  return (
+                    <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-gray-200">
+                      <h2 className="text-lg font-bold mb-6 text-red-700 pb-3 border-b-2 border-red-200">
+                        USD Cashflow Analysis - Error
+                      </h2>
+                      <p className="text-red-600">
+                        Error loading USD cashflow data. Please check the data
+                        format.
+                      </p>
                     </div>
-                  </div>
-                );
+                  );
+                }
               })()}
 
             {/* Combined Cashflow Analysis */}
             {sgdSankeyData &&
               usdSankeyData &&
+              sgdSankeyData.cashflowItems &&
+              usdSankeyData.cashflowItems &&
               (() => {
-                // Combine SGD data with USD SGD equivalents
-                const combinedItems = [
-                  ...sgdSankeyData.cashflowItems,
-                  ...(usdSankeyData.cashflowItemsSgd || []),
-                ];
+                try {
+                  // Combine SGD data with USD SGD equivalents
+                  const combinedItems = [
+                    ...sgdSankeyData.cashflowItems,
+                    ...(usdSankeyData.cashflowItemsSgd || []),
+                  ];
 
-                const combinedOpeningBalance =
-                  sgdOpeningBalance + (usdSankeyData.openingBalanceSgd || 0);
+                  const combinedOpeningBalance =
+                    sgdOpeningBalance + (usdSankeyData.openingBalanceSgd || 0);
 
-                const totalInflow = combinedItems
-                  .filter((item) => item.Type === "Inflow")
-                  .reduce((sum, item) => sum + item.Amount, 0);
+                  const totalInflow = combinedItems
+                    .filter((item) => item.Type === "Inflow")
+                    .reduce((sum, item) => sum + (item.Amount || 0), 0);
 
-                const totalOutflow = combinedItems
-                  .filter((item) => item.Type === "Outflow")
-                  .reduce((sum, item) => sum + item.Amount, 0);
+                  const totalOutflow = combinedItems
+                    .filter((item) => item.Type === "Outflow")
+                    .reduce((sum, item) => sum + (item.Amount || 0), 0);
 
-                const closingBalance =
-                  combinedOpeningBalance + totalInflow - totalOutflow;
-                const totalAvailable = combinedOpeningBalance + totalInflow;
+                  const closingBalance =
+                    combinedOpeningBalance + totalInflow - totalOutflow;
+                  const totalAvailable = combinedOpeningBalance + totalInflow;
 
-                // Group inflows by category
-                const inflowsByCategory = {};
-                combinedItems
-                  .filter((item) => item.Type === "Inflow")
-                  .forEach((item) => {
-                    if (!inflowsByCategory[item.Category]) {
-                      inflowsByCategory[item.Category] = [];
-                    }
-                    inflowsByCategory[item.Category].push(item);
-                  });
+                  // Group inflows by category
+                  const inflowsByCategory = {};
+                  combinedItems
+                    .filter((item) => item.Type === "Inflow")
+                    .forEach((item) => {
+                      const category = item.Category || "Uncategorized";
+                      if (!inflowsByCategory[category]) {
+                        inflowsByCategory[category] = [];
+                      }
+                      inflowsByCategory[category].push(item);
+                    });
 
-                // Group outflows by category
-                const outflowsByCategory = {};
-                combinedItems
-                  .filter((item) => item.Type === "Outflow")
-                  .forEach((item) => {
-                    if (!outflowsByCategory[item.Category]) {
-                      outflowsByCategory[item.Category] = [];
-                    }
-                    outflowsByCategory[item.Category].push(item);
-                  });
+                  // Group outflows by category
+                  const outflowsByCategory = {};
+                  combinedItems
+                    .filter((item) => item.Type === "Outflow")
+                    .forEach((item) => {
+                      const category = item.Category || "Uncategorized";
+                      if (!outflowsByCategory[category]) {
+                        outflowsByCategory[category] = [];
+                      }
+                      outflowsByCategory[category].push(item);
+                    });
 
-                return (
-                  <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-200">
-                    <h2 className="text-lg font-bold mb-6 text-purple-700 pb-3 border-b-2 border-purple-200">
-                      Combined Cashflow Analysis (SGD)
-                    </h2>
+                  return (
+                    <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-200">
+                      <h2 className="text-lg font-bold mb-6 text-purple-700 pb-3 border-b-2 border-purple-200">
+                        Combined Cashflow Analysis (SGD)
+                      </h2>
 
-                    <div className="grid grid-cols-12 gap-6 items-start">
-                      {/* Column 1: Opening Balance & Inflows */}
-                      <div className="col-span-3 space-y-3">
-                        <div className="bg-gradient-to-br from-purple-500 to-purple-700 rounded-xl shadow-lg p-3 text-white">
-                          <h3 className="text-[10px] font-bold mb-1 uppercase tracking-wider opacity-90">
-                            Opening Balance
-                          </h3>
-                          <p className="text-base font-bold">
-                            {formatCurrency(combinedOpeningBalance)}
-                          </p>
+                      <div className="grid grid-cols-12 gap-6 items-start">
+                        {/* Column 1: Opening Balance & Inflows */}
+                        <div className="col-span-3 space-y-3">
+                          <div className="bg-gradient-to-br from-purple-500 to-purple-700 rounded-xl shadow-lg p-3 text-white">
+                            <h3 className="text-[10px] font-bold mb-1 uppercase tracking-wider opacity-90">
+                              Opening Balance
+                            </h3>
+                            <p className="text-base font-bold">
+                              {formatCurrency(combinedOpeningBalance)}
+                            </p>
+                          </div>
+
+                          <div className="space-y-2 mt-4">
+                            <h3 className="text-[10px] font-bold text-gray-600 uppercase tracking-wider pb-1 border-b border-gray-300">
+                              Cash Inflows
+                            </h3>
+                            {Object.entries(inflowsByCategory).map(
+                              ([category, items]) => {
+                                const categoryTotal = items.reduce(
+                                  (sum, item) => sum + item.Amount,
+                                  0
+                                );
+                                const percentage =
+                                  totalInflow > 0
+                                    ? (
+                                        (categoryTotal / totalInflow) *
+                                        100
+                                      ).toFixed(1)
+                                    : 0;
+                                return (
+                                  <div
+                                    key={category}
+                                    className="bg-purple-50 rounded-lg p-2 border border-purple-200 hover:shadow-md transition-shadow"
+                                  >
+                                    <div className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide mb-0.5">
+                                      {category}
+                                    </div>
+                                    <div className="flex items-baseline justify-between gap-2">
+                                      <div className="text-sm font-bold text-purple-900">
+                                        {formatCurrency(categoryTotal)}
+                                      </div>
+                                      <div className="text-[10px] text-purple-600 font-semibold">
+                                        {percentage}%
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                            )}
+                          </div>
                         </div>
 
-                        <div className="space-y-2 mt-4">
+                        {/* Column 2: Total Inflows */}
+                        <div className="col-span-2 flex flex-col items-center justify-center py-6">
+                          <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-2xl p-4 text-white text-center w-full">
+                            <h3 className="text-[10px] font-bold mb-2 uppercase tracking-wider opacity-90">
+                              Total Inflows
+                            </h3>
+                            <p className="text-xl font-bold">
+                              {formatCurrency(totalAvailable)}
+                            </p>
+                          </div>
+                          <div className="my-4">
+                            <div className="text-3xl text-red-500 font-bold animate-pulse">
+                              →
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Column 3: Outflows with arrows to detailed breakdown */}
+                        <div className="col-span-7 space-y-4">
                           <h3 className="text-[10px] font-bold text-gray-600 uppercase tracking-wider pb-1 border-b border-gray-300">
-                            Cash Inflows
+                            Cash Outflows → Detailed Breakdown
                           </h3>
-                          {Object.entries(inflowsByCategory).map(
+                          {Object.entries(outflowsByCategory).map(
                             ([category, items]) => {
                               const categoryTotal = items.reduce(
                                 (sum, item) => sum + item.Amount,
                                 0
                               );
                               const percentage =
-                                totalInflow > 0
+                                totalAvailable > 0
                                   ? (
-                                      (categoryTotal / totalInflow) *
+                                      (categoryTotal / totalAvailable) *
                                       100
                                     ).toFixed(1)
                                   : 0;
+
+                              // Group by contact and sum amounts
+                              const contactTotals = {};
+                              items.forEach((item) => {
+                                if (!contactTotals[item.Contact]) {
+                                  contactTotals[item.Contact] = 0;
+                                }
+                                contactTotals[item.Contact] += item.Amount;
+                              });
+
                               return (
                                 <div
                                   key={category}
-                                  className="bg-purple-50 rounded-lg p-2 border border-purple-200 hover:shadow-md transition-shadow"
+                                  className="flex items-start gap-3"
                                 >
-                                  <div className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide mb-0.5">
-                                    {category}
-                                  </div>
-                                  <div className="flex items-baseline justify-between gap-2">
-                                    <div className="text-sm font-bold text-purple-900">
+                                  {/* Outflow Summary */}
+                                  <div className="flex-shrink-0 w-64 bg-green-50 rounded-lg p-2 border-l-4 border-orange-500 hover:shadow-md transition-shadow">
+                                    <div className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide">
+                                      {category}
+                                    </div>
+                                    <div className="text-sm font-bold text-gray-900 mt-0.5">
                                       {formatCurrency(categoryTotal)}
                                     </div>
-                                    <div className="text-[10px] text-purple-600 font-semibold">
+                                    <div className="text-[10px] text-gray-500 mt-0.5 font-medium">
                                       {percentage}%
+                                    </div>
+                                  </div>
+
+                                  {/* Curved Arrow */}
+                                  <div className="flex-shrink-0 flex items-center justify-center pt-4">
+                                    <svg
+                                      width="40"
+                                      height="40"
+                                      viewBox="0 0 40 40"
+                                      className="text-green-500"
+                                    >
+                                      <path
+                                        d="M 5 20 Q 20 20, 30 20"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        fill="none"
+                                        markerEnd="url(#arrowhead-combined)"
+                                      />
+                                      <defs>
+                                        <marker
+                                          id="arrowhead-combined"
+                                          markerWidth="10"
+                                          markerHeight="10"
+                                          refX="9"
+                                          refY="3"
+                                          orient="auto"
+                                        >
+                                          <polygon
+                                            points="0 0, 10 3, 0 6"
+                                            fill="currentColor"
+                                          />
+                                        </marker>
+                                      </defs>
+                                    </svg>
+                                  </div>
+
+                                  {/* Detailed Breakdown */}
+                                  <div className="flex-1">
+                                    <div className="grid grid-cols-2 gap-2">
+                                      {Object.entries(contactTotals).map(
+                                        ([contact, total], idx) => {
+                                          const contactPercentage =
+                                            categoryTotal > 0
+                                              ? (
+                                                  (total / categoryTotal) *
+                                                  100
+                                                ).toFixed(1)
+                                              : 0;
+                                          return (
+                                            <div
+                                              key={`${category}-${idx}`}
+                                              className="bg-white rounded-lg p-2 border border-gray-200 hover:border-gray-300 hover:shadow transition-all"
+                                            >
+                                              <div className="text-[10px] text-gray-600 mb-0.5">
+                                                {contact}
+                                              </div>
+                                              <div className="text-xs font-bold text-gray-900">
+                                                {formatCurrency(total)}
+                                              </div>
+                                              <div className="text-[9px] text-gray-500 mt-0.5">
+                                                {contactPercentage}%
+                                              </div>
+                                            </div>
+                                          );
+                                        }
+                                      )}
                                     </div>
                                   </div>
                                 </div>
@@ -6424,184 +6754,66 @@ export default function PLDashboard() {
                         </div>
                       </div>
 
-                      {/* Column 2: Total Inflows */}
-                      <div className="col-span-2 flex flex-col items-center justify-center py-6">
-                        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-2xl p-4 text-white text-center w-full">
-                          <h3 className="text-[10px] font-bold mb-2 uppercase tracking-wider opacity-90">
+                      {/* Bottom Summary */}
+                      <div className="grid grid-cols-4 gap-4 mt-8 pt-6 border-t-2 border-gray-200">
+                        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow-lg p-4 border-2 border-green-300">
+                          <h3 className="text-[10px] font-bold text-green-700 uppercase tracking-wide mb-1">
                             Total Inflows
                           </h3>
-                          <p className="text-xl font-bold">
-                            {formatCurrency(totalAvailable)}
+                          <p className="text-lg font-bold text-green-900">
+                            {formatCurrency(totalInflow)}
                           </p>
                         </div>
-                        <div className="my-4">
-                          <div className="text-3xl text-red-500 font-bold animate-pulse">
-                            →
-                          </div>
+                        <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow-lg p-4 border-2 border-red-300">
+                          <h3 className="text-[10px] font-bold text-red-700 uppercase tracking-wide mb-1">
+                            Total Outflows
+                          </h3>
+                          <p className="text-lg font-bold text-red-900">
+                            {formatCurrency(totalOutflow)}
+                          </p>
+                        </div>
+                        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-lg p-4 border-2 border-blue-300">
+                          <h3 className="text-[10px] font-bold text-blue-700 uppercase tracking-wide mb-1">
+                            Net Change
+                          </h3>
+                          <p
+                            className={`text-lg font-bold ${
+                              totalInflow - totalOutflow >= 0
+                                ? "text-green-700"
+                                : "text-red-700"
+                            }`}
+                          >
+                            {formatCurrency(totalInflow - totalOutflow)}
+                          </p>
+                        </div>
+                        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow-lg p-4 border-2 border-purple-300">
+                          <h3 className="text-[10px] font-bold text-purple-700 uppercase tracking-wide mb-1">
+                            Closing Balance
+                          </h3>
+                          <p className="text-lg font-bold text-purple-900">
+                            {formatCurrency(closingBalance)}
+                          </p>
                         </div>
                       </div>
-
-                      {/* Column 3: Outflows with arrows to detailed breakdown */}
-                      <div className="col-span-7 space-y-4">
-                        <h3 className="text-[10px] font-bold text-gray-600 uppercase tracking-wider pb-1 border-b border-gray-300">
-                          Cash Outflows → Detailed Breakdown
-                        </h3>
-                        {Object.entries(outflowsByCategory).map(
-                          ([category, items]) => {
-                            const categoryTotal = items.reduce(
-                              (sum, item) => sum + item.Amount,
-                              0
-                            );
-                            const percentage =
-                              totalAvailable > 0
-                                ? (
-                                    (categoryTotal / totalAvailable) *
-                                    100
-                                  ).toFixed(1)
-                                : 0;
-
-                            // Group by contact and sum amounts
-                            const contactTotals = {};
-                            items.forEach((item) => {
-                              if (!contactTotals[item.Contact]) {
-                                contactTotals[item.Contact] = 0;
-                              }
-                              contactTotals[item.Contact] += item.Amount;
-                            });
-
-                            return (
-                              <div
-                                key={category}
-                                className="flex items-start gap-3"
-                              >
-                                {/* Outflow Summary */}
-                                <div className="flex-shrink-0 w-64 bg-green-50 rounded-lg p-2 border-l-4 border-orange-500 hover:shadow-md transition-shadow">
-                                  <div className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide">
-                                    {category}
-                                  </div>
-                                  <div className="text-sm font-bold text-gray-900 mt-0.5">
-                                    {formatCurrency(categoryTotal)}
-                                  </div>
-                                  <div className="text-[10px] text-gray-500 mt-0.5 font-medium">
-                                    {percentage}%
-                                  </div>
-                                </div>
-
-                                {/* Curved Arrow */}
-                                <div className="flex-shrink-0 flex items-center justify-center pt-4">
-                                  <svg
-                                    width="40"
-                                    height="40"
-                                    viewBox="0 0 40 40"
-                                    className="text-green-500"
-                                  >
-                                    <path
-                                      d="M 5 20 Q 20 20, 30 20"
-                                      stroke="currentColor"
-                                      strokeWidth="2"
-                                      fill="none"
-                                      markerEnd="url(#arrowhead-combined)"
-                                    />
-                                    <defs>
-                                      <marker
-                                        id="arrowhead-combined"
-                                        markerWidth="10"
-                                        markerHeight="10"
-                                        refX="9"
-                                        refY="3"
-                                        orient="auto"
-                                      >
-                                        <polygon
-                                          points="0 0, 10 3, 0 6"
-                                          fill="currentColor"
-                                        />
-                                      </marker>
-                                    </defs>
-                                  </svg>
-                                </div>
-
-                                {/* Detailed Breakdown */}
-                                <div className="flex-1">
-                                  <div className="grid grid-cols-2 gap-2">
-                                    {Object.entries(contactTotals).map(
-                                      ([contact, total], idx) => {
-                                        const contactPercentage =
-                                          categoryTotal > 0
-                                            ? (
-                                                (total / categoryTotal) *
-                                                100
-                                              ).toFixed(1)
-                                            : 0;
-                                        return (
-                                          <div
-                                            key={`${category}-${idx}`}
-                                            className="bg-white rounded-lg p-2 border border-gray-200 hover:border-gray-300 hover:shadow transition-all"
-                                          >
-                                            <div className="text-[10px] text-gray-600 mb-0.5">
-                                              {contact}
-                                            </div>
-                                            <div className="text-xs font-bold text-gray-900">
-                                              {formatCurrency(total)}
-                                            </div>
-                                            <div className="text-[9px] text-gray-500 mt-0.5">
-                                              {contactPercentage}%
-                                            </div>
-                                          </div>
-                                        );
-                                      }
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          }
-                        )}
-                      </div>
                     </div>
-
-                    {/* Bottom Summary */}
-                    <div className="grid grid-cols-4 gap-4 mt-8 pt-6 border-t-2 border-gray-200">
-                      <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow-lg p-4 border-2 border-green-300">
-                        <h3 className="text-[10px] font-bold text-green-700 uppercase tracking-wide mb-1">
-                          Total Inflows
-                        </h3>
-                        <p className="text-lg font-bold text-green-900">
-                          {formatCurrency(totalInflow)}
-                        </p>
-                      </div>
-                      <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow-lg p-4 border-2 border-red-300">
-                        <h3 className="text-[10px] font-bold text-red-700 uppercase tracking-wide mb-1">
-                          Total Outflows
-                        </h3>
-                        <p className="text-lg font-bold text-red-900">
-                          {formatCurrency(totalOutflow)}
-                        </p>
-                      </div>
-                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-lg p-4 border-2 border-blue-300">
-                        <h3 className="text-[10px] font-bold text-blue-700 uppercase tracking-wide mb-1">
-                          Net Change
-                        </h3>
-                        <p
-                          className={`text-lg font-bold ${
-                            totalInflow - totalOutflow >= 0
-                              ? "text-green-700"
-                              : "text-red-700"
-                          }`}
-                        >
-                          {formatCurrency(totalInflow - totalOutflow)}
-                        </p>
-                      </div>
-                      <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow-lg p-4 border-2 border-purple-300">
-                        <h3 className="text-[10px] font-bold text-purple-700 uppercase tracking-wide mb-1">
-                          Closing Balance
-                        </h3>
-                        <p className="text-lg font-bold text-purple-900">
-                          {formatCurrency(closingBalance)}
-                        </p>
-                      </div>
+                  );
+                } catch (error) {
+                  console.error(
+                    "Error rendering combined cashflow analysis:",
+                    error
+                  );
+                  return (
+                    <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-200">
+                      <h2 className="text-lg font-bold mb-6 text-red-700 pb-3 border-b-2 border-red-200">
+                        Combined Cashflow Analysis - Error
+                      </h2>
+                      <p className="text-red-600">
+                        Error loading combined cashflow data. Please check the
+                        data format.
+                      </p>
                     </div>
-                  </div>
-                );
+                  );
+                }
               })()}
 
             {!sgdSankeyData && !usdSankeyData && (
