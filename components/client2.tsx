@@ -321,7 +321,7 @@ export default function PLDashboard() {
   }, [JSON.stringify(projectCostsData)]);
 
   useEffect(() => {
-    if (dealsData && dealsData.length > 0) {
+    if (dealsData !== undefined) {
       setDeals(dealsData);
     }
   }, [JSON.stringify(dealsData)]);
@@ -10077,7 +10077,7 @@ export default function PLDashboard() {
                 </h2>
                 {editingDeal && (
                   <button
-                    onPointerDown={(e) => {
+                    onClick={(e) => {
                       e.stopPropagation();
                       setDealToDelete(editingDeal);
                       setShowDeleteConfirm(true);
