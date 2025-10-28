@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface UploadStatus {
   shopify: boolean;
@@ -343,148 +344,153 @@ export default function DataUploadPage() {
         </div>
       </div>
 
-      {/* Client-organized sections */}
-      {clientDataSections.map((section) => (
-        <div key={section.clientCode} className="space-y-4">
-          {/* Client Section Header */}
-          <div
-            className={`bg-gradient-to-r ${
-              section.color === "blue"
-                ? "from-blue-100 to-blue-50 border-blue-300"
-                : section.color === "purple"
-                ? "from-purple-100 to-purple-50 border-purple-300"
-                : "from-green-100 to-green-50 border-green-300"
-            } rounded-xl p-6 border-2`}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                  {section.clientName}
-                  <Badge
-                    variant="outline"
-                    className={`${
-                      section.color === "blue"
-                        ? "bg-blue-200 text-blue-900 border-blue-400"
-                        : section.color === "purple"
-                        ? "bg-purple-200 text-purple-900 border-purple-400"
-                        : "bg-green-200 text-green-900 border-green-400"
-                    }`}
-                  >
-                    {section.clientCode}
-                  </Badge>
-                </h2>
-                <p className="text-sm text-gray-600 mt-1">
-                  {section.description}
-                </p>
-              </div>
-              <div className="text-right">
-                <div className="text-xs text-gray-500 mb-1">Files Uploaded</div>
-                <div className="text-2xl font-bold text-gray-900">
-                  {
-                    section.files.filter(
-                      (f) => status[f.key as keyof UploadStatus]
-                    ).length
-                  }
-                  <span className="text-lg text-gray-400">
-                    /{section.files.length}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
+      {/* Tabs for Client Navigation */}
+      <Tabs defaultValue={clientDataSections[0]?.clientCode} className="w-full">
+        <TabsList className="bg-muted p-1 rounded-lg">
+          {clientDataSections.map((section) => {
+            const uploadedCount = section.files.filter(
+              (f) => status[f.key as keyof UploadStatus]
+            ).length;
+            const totalCount = section.files.length;
 
-          {/* File Upload Cards */}
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pl-4">
-            {section.files.map((file) => (
-              <Card
-                key={file.key}
-                className={`transition-all hover:shadow-lg ${
-                  status[file.key as keyof UploadStatus]
-                    ? "border-green-500 shadow-md bg-green-50"
-                    : "border-border hover:border-gray-400"
+            return (
+              <TabsTrigger
+                key={section.clientCode}
+                value={section.clientCode}
+                className="data-[state=active]:bg-background relative"
+              >
+                {section.clientName}
+                <Badge
+                  variant={
+                    uploadedCount === totalCount ? "default" : "secondary"
+                  }
+                  className="ml-2"
+                >
+                  {uploadedCount}/{totalCount}
+                </Badge>
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
+
+        {clientDataSections.map((section) => (
+          <TabsContent
+            key={section.clientCode}
+            value={section.clientCode}
+            className="mt-6 space-y-4"
+          >
+            {/* Client Description */}
+            <div className="text-center mb-6">
+              <Badge
+                variant="outline"
+                className={`mb-2 ${
+                  section.color === "blue"
+                    ? "border-blue-400 text-blue-700"
+                    : section.color === "purple"
+                    ? "border-purple-400 text-purple-700"
+                    : "border-green-400 text-green-700"
                 }`}
               >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-3xl">{file.icon}</span>
-                      <div>
-                        <CardTitle className="text-base">
-                          {file.label}
-                        </CardTitle>
-                        {status[file.key as keyof UploadStatus] && (
-                          <Badge
-                            variant="default"
-                            className="bg-green-600 mt-1"
-                          >
-                            <CheckCircle className="w-3 h-3 mr-1" />
-                            Active
-                          </Badge>
-                        )}
+                {section.clientCode}
+              </Badge>
+              <p className="text-sm text-muted-foreground">
+                {section.description}
+              </p>
+            </div>
+
+            {/* File Upload Cards */}
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {section.files.map((file) => (
+                <Card
+                  key={file.key}
+                  className={`transition-all hover:shadow-lg ${
+                    status[file.key as keyof UploadStatus]
+                      ? "border-green-500 shadow-md bg-green-50"
+                      : "border-border hover:border-gray-400"
+                  }`}
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-3xl">{file.icon}</span>
+                        <div>
+                          <CardTitle className="text-base">
+                            {file.label}
+                          </CardTitle>
+                          {status[file.key as keyof UploadStatus] && (
+                            <Badge
+                              variant="default"
+                              className="bg-green-600 mt-1"
+                            >
+                              <CheckCircle className="w-3 h-3 mr-1" />
+                              Active
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <CardDescription className="text-xs mt-2">
-                    {getFileDescription(file.key)}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <label className="cursor-pointer block">
-                    <input
-                      type="file"
-                      accept=".csv"
-                      onChange={(e) => handleFileUpload(e, file.key)}
-                      disabled={uploading}
-                      className="hidden"
-                    />
-                    <Button
-                      variant={
-                        status[file.key as keyof UploadStatus]
-                          ? "outline"
-                          : "default"
-                      }
-                      size="sm"
-                      className="w-full"
-                      disabled={uploading}
-                      asChild
-                    >
-                      <div>
-                        {uploading && currentUpload === file.key ? (
-                          <>
-                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current mr-2" />
-                            Uploading...
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="w-3 h-3 mr-2" />
-                            {status[file.key as keyof UploadStatus]
-                              ? "Re-upload"
-                              : "Upload CSV"}
-                          </>
-                        )}
-                      </div>
-                    </Button>
-                  </label>
-                  {status[file.key as keyof UploadStatus] && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="mt-2 w-full text-red-600 hover:text-red-700 hover:bg-red-50"
-                      disabled={uploading}
-                      onClick={() => {
-                        setPendingDeleteKey(file.key);
-                        setDeleteDialogOpen(true);
-                      }}
-                    >
-                      Remove
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      ))}
+                    <CardDescription className="text-xs mt-2">
+                      {getFileDescription(file.key)}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <label className="cursor-pointer block">
+                      <input
+                        type="file"
+                        accept=".csv"
+                        onChange={(e) => handleFileUpload(e, file.key)}
+                        disabled={uploading}
+                        className="hidden"
+                      />
+                      <Button
+                        variant={
+                          status[file.key as keyof UploadStatus]
+                            ? "outline"
+                            : "default"
+                        }
+                        size="sm"
+                        className="w-full"
+                        disabled={uploading}
+                        asChild
+                      >
+                        <div>
+                          {uploading && currentUpload === file.key ? (
+                            <>
+                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current mr-2" />
+                              Uploading...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="w-3 h-3 mr-2" />
+                              {status[file.key as keyof UploadStatus]
+                                ? "Re-upload"
+                                : "Upload CSV"}
+                            </>
+                          )}
+                        </div>
+                      </Button>
+                    </label>
+                    {status[file.key as keyof UploadStatus] && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mt-2 w-full text-red-600 hover:text-red-700 hover:bg-red-50"
+                        disabled={uploading}
+                        onClick={() => {
+                          setPendingDeleteKey(file.key);
+                          setDeleteDialogOpen(true);
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+        ))}
+      </Tabs>
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
