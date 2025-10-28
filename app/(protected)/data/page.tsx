@@ -34,6 +34,11 @@ interface UploadStatus {
   pl_client2: boolean;
   sgd_transactions: boolean;
   usd_transactions: boolean;
+  pl_client3: boolean;
+  cashflow_client3: boolean;
+  pipeline_client3: boolean;
+  sgd_sankey_client3: boolean;
+  usd_sankey_client3: boolean;
 }
 
 export default function DataUploadPage() {
@@ -56,6 +61,11 @@ export default function DataUploadPage() {
     pl_client2: false,
     sgd_transactions: false,
     usd_transactions: false,
+    pl_client3: false,
+    cashflow_client3: false,
+    pipeline_client3: false,
+    sgd_sankey_client3: false,
+    usd_sankey_client3: false,
   };
 
   useEffect(() => {
@@ -115,6 +125,17 @@ export default function DataUploadPage() {
         fileType === "usd_transactions"
       ) {
         clearCache("csv-data-client2");
+      }
+
+      // Clear client3 dedicated cache if client3 data was uploaded
+      if (
+        fileType === "pl_client3" ||
+        fileType === "cashflow_client3" ||
+        fileType === "pipeline_client3" ||
+        fileType === "sgd_sankey_client3" ||
+        fileType === "usd_sankey_client3"
+      ) {
+        clearCache("csv-data-client3");
       }
 
       refetchStatus();
@@ -263,6 +284,11 @@ export default function DataUploadPage() {
       pl_client2: "P&L - ADNA Research",
       sgd_transactions: "SGD Bank Transactions",
       usd_transactions: "USD Bank Transactions",
+      pl_client3: "P&L Statement - Client 3",
+      cashflow_client3: "Cashflow - Client 3",
+      pipeline_client3: "Pipeline - Client 3",
+      sgd_sankey_client3: "SGD Cashflow Analysis - Client 3",
+      usd_sankey_client3: "USD Cashflow Analysis - Client 3",
     };
     return labels[key] || key;
   };
@@ -278,6 +304,11 @@ export default function DataUploadPage() {
         "Upload SGD bank statement for cashflow visualization (ADNA Research)",
       usd_transactions:
         "Upload USD bank statement for cashflow visualization (ADNA Research)",
+      pl_client3: "Upload office-wise profit & loss data",
+      cashflow_client3: "Upload office-wise cashflow data",
+      pipeline_client3: "Upload sales pipeline with opportunities",
+      sgd_sankey_client3: "Upload SGD bank statement for cashflow analysis",
+      usd_sankey_client3: "Upload USD bank statement for cashflow analysis",
     };
     return descriptions[key] || "";
   };
@@ -318,18 +349,28 @@ export default function DataUploadPage() {
         { key: "usd_transactions", icon: "💵", label: "USD Bank Transactions" },
       ],
     },
-    // Add new clients here following the same pattern
-    // Example for Client 3:
-    // {
-    //   clientName: "Your Company Name",
-    //   clientCode: "Client 3",
-    //   color: "green", // Available: "blue", "purple", "green"
-    //   description: "Brief description of the business",
-    //   files: [
-    //     { key: "pl_client3", icon: "📊", label: "P&L Statement" },
-    //     // Add more files as needed
-    //   ],
-    // },
+    {
+      clientName: "Client 3",
+      clientCode: "Client 3",
+      color: "green",
+      description:
+        "Multi-office operations with comprehensive financial tracking",
+      files: [
+        { key: "pl_client3", icon: "📊", label: "P&L Statement" },
+        { key: "cashflow_client3", icon: "💸", label: "Cashflow" },
+        { key: "pipeline_client3", icon: "🎯", label: "Pipeline" },
+        {
+          key: "sgd_sankey_client3",
+          icon: "💰",
+          label: "SGD Cashflow Analysis",
+        },
+        {
+          key: "usd_sankey_client3",
+          icon: "💵",
+          label: "USD Cashflow Analysis",
+        },
+      ],
+    },
   ];
 
   return (

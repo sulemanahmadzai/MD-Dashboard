@@ -19,6 +19,11 @@ interface CSVStatus {
   pl_client2: boolean;
   sgd_transactions: boolean;
   usd_transactions: boolean;
+  pl_client3: boolean;
+  cashflow_client3: boolean;
+  pipeline_client3: boolean;
+  sgd_sankey_client3: boolean;
+  usd_sankey_client3: boolean;
 }
 
 /**

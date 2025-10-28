@@ -31,6 +31,11 @@ export async function GET(request: NextRequest) {
       pl_client2: false,
       sgd_transactions: false,
       usd_transactions: false,
+      pl_client3: false,
+      cashflow_client3: false,
+      pipeline_client3: false,
+      sgd_sankey_client3: false,
+      usd_sankey_client3: false,
     };
 
     // Mark which file types have been uploaded

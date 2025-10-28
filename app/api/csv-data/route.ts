@@ -345,6 +345,11 @@ export async function GET(request: NextRequest) {
       pl_client2: latestData.pl_client2 || null,
       sgd_transactions: latestData.sgd_transactions || null,
       usd_transactions: latestData.usd_transactions || null,
+      pl_client3: latestData.pl_client3 || null,
+      cashflow_client3: latestData.cashflow_client3 || null,
+      pipeline_client3: latestData.pipeline_client3 || null,
+      sgd_sankey_client3: latestData.sgd_sankey_client3 || null,
+      usd_sankey_client3: latestData.usd_sankey_client3 || null,
     });
   } catch (error) {
     console.error("Error fetching CSV data:", error);
@@ -386,6 +391,11 @@ export async function POST(request: NextRequest) {
         "pl_client2",
         "sgd_transactions",
         "usd_transactions",
+        "pl_client3",
+        "cashflow_client3",
+        "pipeline_client3",
+        "sgd_sankey_client3",
+        "usd_sankey_client3",
       ].includes(fileType)
     ) {
       return NextResponse.json({ error: "Invalid fileType" }, { status: 400 });
@@ -477,6 +487,11 @@ export async function DELETE(request: NextRequest) {
         "pl_client2",
         "sgd_transactions",
         "usd_transactions",
+        "pl_client3",
+        "cashflow_client3",
+        "pipeline_client3",
+        "sgd_sankey_client3",
+        "usd_sankey_client3",
       ].includes(fileType)
     ) {
       return NextResponse.json(
