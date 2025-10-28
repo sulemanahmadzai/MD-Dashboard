@@ -229,7 +229,81 @@ export default function PLDashboard() {
 
   const [classifications, setClassifications] = useState<
     Record<string, string>
-  >({});
+  >({
+    // ADNA Research classifications
+    "Other Revenue": "Other Revenue",
+    "Research Revenue - Qualitative": "Qual Revenue",
+    "Research Revenue - Quantitative": "Quant Revenue",
+    "Research Costs (Qual)": "Cost of Sales (Qual)",
+    "Research Costs (Quant)": "Cost of Sales (Quant)",
+    "Translation Costs": "Cost of Sales (Quant)",
+    Others: "Cost of Sales (Other)",
+    "AWS (Server Costs)": "Cost of Sales",
+    Advertising: "Admin Cost",
+    "Bank Fees": "Admin Cost",
+    "Bank Revaluations": "Admin Cost",
+    "Consulting & Accounting": "Admin Cost",
+    "Corporate Secretarial Fees": "Admin Cost",
+    Entertainment: "Admin Cost",
+    "Freight & Courier": "Admin Cost",
+    "General Expenses": "Admin Cost",
+    "Legal expenses": "Admin Cost",
+    "Office Expenses": "Admin Cost",
+    "Printing & Stationery": "Admin Cost",
+    "Realised Currency Gains": "Admin Cost",
+    Depreciation: "Admin Cost",
+    "Stripe Fees T": "Admin Cost",
+    Subscriptions: "Admin Cost",
+    "Travel - International": "Admin Cost",
+    "Travel - National": "Admin Cost",
+    "Unrealised Currency Gains": "Admin Cost",
+    Website: "Admin Cost",
+    Server: "Admin Cost",
+    "CDAC/SINDA/MENDAKI/Others": "Employment Cost",
+    Commission: "Employment Cost",
+    "CPF - Indirect Team": "Employment Cost",
+    "CPF - Research Team": "Employment Cost",
+    "Employee SDL": "Employment Cost",
+    Insurance: "Employment Cost",
+    "Salaries - Indirect Team": "Employment Cost",
+    "Salaries - Research Team": "Employment Cost",
+    "Salaries - Tech Team": "Employment Cost",
+    "Salaries - Sales and Marketing": "Employment Cost",
+    "Salaries - Account Servicing": "Employment Cost",
+    Bonuses: "Employment Cost",
+    Senor: "Employment Cost",
+    "Interest Expense": "Financing Cost",
+
+    // E-commerce classifications (if Client2 also uses this data)
+    "Shopify Sales": "Other Revenue",
+    "Shopify Discounts": "Other Revenue",
+    "Shopify Refunds": "Other Revenue",
+    "Shopify Shipping Income": "Other Revenue",
+    "TikTok Sales": "Other Revenue",
+    "TikTok Discounts": "Other Revenue",
+    "TikTok Refunds": "Other Revenue",
+    "TikTok Shipping Income": "Other Revenue",
+    "Cost of Goods Sold": "Cost of Sales",
+    "Shopify Fees": "Admin Cost",
+    "TikTok Commissions": "Admin Cost",
+    "Dolphin International": "Cost of Sales",
+    Shippo: "Cost of Sales",
+    "TikTok Shipping": "Cost of Sales",
+    "Shipping Supplies - COS": "Cost of Sales",
+    "Advertising & Marketing": "Admin Cost",
+    "Computer and Software Expenses": "Admin Cost",
+    Contractors: "Admin Cost",
+    "Cash back": "Other Revenue",
+    "Interest Income": "Other Revenue",
+    "Automobile Expenses": "Admin Cost",
+    "Continuing Education": "Admin Cost",
+    "Legal & Professional Fees": "Admin Cost",
+    "Meals & Entertainment": "Admin Cost",
+    "Office Supplies": "Admin Cost",
+    "Taxes and Licenses": "Admin Cost",
+    TBD: "Admin Cost",
+    Travel: "Admin Cost",
+  });
 
   const classificationCategories = [
     "Other Revenue",
@@ -247,6 +321,7 @@ export default function PLDashboard() {
   // Auto-process data when it's available
   useEffect(() => {
     if (csvData && !dataLoaded) {
+      console.log("🚀 Auto-processing CSV data...");
       processData(csvData);
     }
   }, [csvData, dataLoaded]);
@@ -345,12 +420,8 @@ export default function PLDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings]);
 
-  // Load global classifications
-  useEffect(() => {
-    if (globalClassificationsData?.classifications) {
-      setClassifications(globalClassificationsData.classifications);
-    }
-  }, [globalClassificationsData]);
+  // Note: Classifications are now hardcoded in the initial state
+  // No need to load from global classifications
 
   // Auto-save opening balance to database
   useEffect(() => {
@@ -388,6 +459,9 @@ export default function PLDashboard() {
     setStatus({ type: "info", message: "Processing P&L data..." });
 
     try {
+      console.log("📦 CSV Data received:", data);
+      console.log("📁 Has pl_client2?", !!data.pl_client2);
+
       // Check if P&L data exists (Client 2)
       if (!data.pl_client2) {
         setStatus({
@@ -399,10 +473,12 @@ export default function PLDashboard() {
         return;
       }
 
+      console.log("✅ P&L data exists, processing...");
       // Process the fetched P&L data
       await handleProcess(data.pl_client2);
       setDataLoaded(true);
     } catch (error: any) {
+      console.error("❌ Error in processData:", error);
       setStatus({
         type: "error",
         message: `Error processing data: ${error.message}`,
@@ -418,12 +494,17 @@ export default function PLDashboard() {
     try {
       const Papa = await import("papaparse");
 
+      console.log("🔍 Raw P&L Data received:", rawPlData);
+
       // Convert the raw data to CSV format for processing
       const csvText = Papa.unparse(rawPlData);
       const parsed = Papa.parse(csvText, {
         header: true,
         skipEmptyLines: true,
       });
+
+      console.log("📊 Parsed data:", parsed.data);
+      console.log("📋 Fields:", parsed.meta.fields);
 
       const accountColumn = parsed.meta.fields[0];
       const allColumns = parsed.meta.fields;
@@ -494,44 +575,23 @@ export default function PLDashboard() {
         return hasData;
       });
 
-      const unclassified = [];
-      plData.forEach((row) => {
-        const lineItem = row[accountColumn];
-        if (
-          !lineItem.toLowerCase().startsWith("total") &&
-          !classifications[lineItem]
-        ) {
-          if (!unclassified.includes(lineItem)) {
-            unclassified.push(lineItem);
-          }
-        }
-      });
+      // Auto-assign categories based on predefined classifications
+      // No need to check for unclassified items - they will be auto-assigned or default to "Unclassified"
+      console.log("✅ Processing complete. P&L Data rows:", plData.length);
+      console.log("📊 Sample P&L row:", plData[0]);
+      console.log(
+        "🏷️ Classifications loaded:",
+        Object.keys(classifications).length,
+        "mappings"
+      );
+      console.log("📅 Months:", months.map((m) => m.displayName).join(", "));
 
-      if (unclassified.length > 0) {
-        // Check if global classifications exist
-        if (globalClassificationsData?.hasClassifications) {
-          // Use global classifications - no modal needed
-          setDashboardData({ plData, accountColumn, months, monthStatus });
-          setStatus({ type: "success", message: "Processing complete!" });
-          setProcessing(false);
-        } else {
-          // No global classifications - show modal for admin to set up
-          setUnclassifiedItems(
-            unclassified.map((item) => ({ name: item, category: "" }))
-          );
-          setShowClassificationModal(true);
-          setDashboardData({ plData, accountColumn, months, monthStatus });
-          setProcessing(false);
-          setStatus({
-            type: "info",
-            message: "Please classify new line items",
-          });
-        }
-      } else {
-        setDashboardData({ plData, accountColumn, months, monthStatus });
-        setStatus({ type: "success", message: "Processing complete!" });
-        setProcessing(false);
-      }
+      setDashboardData({ plData, accountColumn, months, monthStatus });
+      setStatus({
+        type: "success",
+        message: "Processing complete! Categories auto-assigned.",
+      });
+      setProcessing(false);
     } catch (error) {
       console.error("Processing error:", error);
       setProcessing(false);
@@ -570,19 +630,53 @@ export default function PLDashboard() {
   };
 
   const getClassifiedData = () => {
-    if (!dashboardData) return null;
+    if (!dashboardData) {
+      console.log("⚠️ No dashboardData available");
+      return null;
+    }
+
+    console.log("🔄 Getting classified data...");
+    console.log("📋 Account column:", dashboardData.accountColumn);
+    console.log("📊 P&L Data rows:", dashboardData.plData?.length);
+    console.log(
+      "🏷️ Available classifications:",
+      Object.keys(classifications).length
+    );
 
     const grouped = {};
-    dashboardData.plData.forEach((row) => {
+    const unclassifiedItems = [];
+
+    dashboardData.plData.forEach((row, idx) => {
       const lineItem = row[dashboardData.accountColumn];
+
+      // Log first few items for debugging
+      if (idx < 5) {
+        console.log(`📝 Row ${idx}: "${lineItem}"`);
+      }
+
       if (lineItem && lineItem.toLowerCase().startsWith("total")) {
         return;
       }
+
       const category = classifications[lineItem] || "Unclassified";
+
+      if (category === "Unclassified") {
+        unclassifiedItems.push(lineItem);
+      }
+
       if (!grouped[category]) {
         grouped[category] = [];
       }
       grouped[category].push(row);
+    });
+
+    console.log("🏷️ Grouped by category:", Object.keys(grouped));
+    console.log("📊 Total line items processed:", dashboardData.plData.length);
+    console.log("⚠️ Unclassified items:", unclassifiedItems.slice(0, 10)); // Show first 10 unclassified
+
+    // Log some category details
+    Object.keys(grouped).forEach((cat) => {
+      console.log(`  - ${cat}: ${grouped[cat].length} items`);
     });
 
     // Add Pipeline Revenue for forecast months
@@ -2081,60 +2175,7 @@ export default function PLDashboard() {
               {processing ? "Processing..." : "Process P&L Data"}
             </button>
 
-            {showClassificationModal && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                <div className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-                  <h2 className="text-2xl font-bold mb-4">
-                    Classify New Line Items
-                  </h2>
-                  <p className="text-gray-600 mb-6">
-                    Please assign categories to these new line items:
-                  </p>
-
-                  <div className="space-y-4 mb-6">
-                    {unclassifiedItems.map((item, idx) => (
-                      <div key={idx} className="flex items-center gap-4">
-                        <div className="flex-1 font-medium">{item.name}</div>
-                        <select
-                          value={item.category}
-                          onChange={(e) => {
-                            const updated = [...unclassifiedItems];
-                            updated[idx].category = e.target.value;
-                            setUnclassifiedItems(updated);
-                          }}
-                          className="px-4 py-2 border rounded-lg"
-                        >
-                          <option value="">Select category...</option>
-                          {classificationCategories.map((cat) => (
-                            <option key={cat} value={cat}>
-                              {cat}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex gap-3">
-                    <button
-                      onClick={handleSaveClassifications}
-                      disabled={unclassifiedItems.some(
-                        (item) => !item.category
-                      )}
-                      className="flex-1 bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-300"
-                    >
-                      Save Classifications
-                    </button>
-                    <button
-                      onClick={() => setShowClassificationModal(false)}
-                      className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* Classification modal removed - categories are now auto-assigned */}
 
             {classifiedData && (
               <>

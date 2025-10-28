@@ -24,7 +24,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import AdminClassificationModal from "@/components/admin-classification-modal";
 
 interface UploadStatus {
   shopify: boolean;
@@ -41,8 +40,6 @@ export default function DataUploadPage() {
   const [currentUpload, setCurrentUpload] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [pendingDeleteKey, setPendingDeleteKey] = useState<string | null>(null);
-  const [showClassificationModal, setShowClassificationModal] = useState(false);
-  const [extractedCategories, setExtractedCategories] = useState<string[]>([]);
   const router = useRouter();
 
   // Use React Query hooks for user and CSV status
@@ -121,18 +118,118 @@ export default function DataUploadPage() {
 
       refetchStatus();
 
-      // Show classification modal for pl_client2 if categories were extracted
+      // Auto-assign classifications for pl_client2 using predefined mappings
       if (
         fileType === "pl_client2" &&
         responseData.extractedCategories?.length > 0
       ) {
-        setExtractedCategories(responseData.extractedCategories);
-        setShowClassificationModal(true);
-        toast.success("Upload successful!", {
-          description: `${getFileLabel(
-            fileType
-          )} has been uploaded. Please classify the categories.`,
-        });
+        // Predefined classification mappings
+        const predefinedClassifications: Record<string, string> = {
+          // ADNA Research classifications
+          "Other Revenue": "Other Revenue",
+          "Research Revenue - Qualitative": "Qual Revenue",
+          "Research Revenue - Quantitative": "Quant Revenue",
+          "Research Costs (Qual)": "Cost of Sales (Qual)",
+          "Research Costs (Quant)": "Cost of Sales (Quant)",
+          "Translation Costs": "Cost of Sales (Quant)",
+          Others: "Cost of Sales (Other)",
+          "AWS (Server Costs)": "Cost of Sales",
+          Advertising: "Admin Cost",
+          "Bank Fees": "Admin Cost",
+          "Bank Revaluations": "Admin Cost",
+          "Consulting & Accounting": "Admin Cost",
+          "Corporate Secretarial Fees": "Admin Cost",
+          Entertainment: "Admin Cost",
+          "Freight & Courier": "Admin Cost",
+          "General Expenses": "Admin Cost",
+          "Legal expenses": "Admin Cost",
+          "Office Expenses": "Admin Cost",
+          "Printing & Stationery": "Admin Cost",
+          "Realised Currency Gains": "Admin Cost",
+          Depreciation: "Admin Cost",
+          "Stripe Fees T": "Admin Cost",
+          Subscriptions: "Admin Cost",
+          "Travel - International": "Admin Cost",
+          "Travel - National": "Admin Cost",
+          "Unrealised Currency Gains": "Admin Cost",
+          Website: "Admin Cost",
+          Server: "Admin Cost",
+          "CDAC/SINDA/MENDAKI/Others": "Employment Cost",
+          Commission: "Employment Cost",
+          "CPF - Indirect Team": "Employment Cost",
+          "CPF - Research Team": "Employment Cost",
+          "Employee SDL": "Employment Cost",
+          Insurance: "Employment Cost",
+          "Salaries - Indirect Team": "Employment Cost",
+          "Salaries - Research Team": "Employment Cost",
+          "Salaries - Tech Team": "Employment Cost",
+          "Salaries - Sales and Marketing": "Employment Cost",
+          "Salaries - Account Servicing": "Employment Cost",
+          Bonuses: "Employment Cost",
+          Senor: "Employment Cost",
+          "Interest Expense": "Financing Cost",
+
+          // E-commerce classifications (if Client2 also uses this data)
+          "Shopify Sales": "Other Revenue",
+          "Shopify Discounts": "Other Revenue",
+          "Shopify Refunds": "Other Revenue",
+          "Shopify Shipping Income": "Other Revenue",
+          "TikTok Sales": "Other Revenue",
+          "TikTok Discounts": "Other Revenue",
+          "TikTok Refunds": "Other Revenue",
+          "TikTok Shipping Income": "Other Revenue",
+          "Cost of Goods Sold": "Cost of Sales",
+          "Shopify Fees": "Admin Cost",
+          "TikTok Commissions": "Admin Cost",
+          "Dolphin International": "Cost of Sales",
+          Shippo: "Cost of Sales",
+          "TikTok Shipping": "Cost of Sales",
+          "Shipping Supplies - COS": "Cost of Sales",
+          "Advertising & Marketing": "Admin Cost",
+          "Computer and Software Expenses": "Admin Cost",
+          Contractors: "Admin Cost",
+          "Cash back": "Other Revenue",
+          "Interest Income": "Other Revenue",
+          "Automobile Expenses": "Admin Cost",
+          "Continuing Education": "Admin Cost",
+          "Legal & Professional Fees": "Admin Cost",
+          "Meals & Entertainment": "Admin Cost",
+          "Office Supplies": "Admin Cost",
+          "Taxes and Licenses": "Admin Cost",
+          TBD: "Admin Cost",
+          Travel: "Admin Cost",
+        };
+
+        // Auto-save classifications to global database
+        try {
+          const classificationResponse = await fetch(
+            "/api/global-classifications",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                classifications: predefinedClassifications,
+              }),
+            }
+          );
+
+          if (classificationResponse.ok) {
+            toast.success("Upload successful!", {
+              description: `${getFileLabel(
+                fileType
+              )} has been uploaded. Categories auto-assigned.`,
+            });
+          } else {
+            throw new Error("Failed to save classifications");
+          }
+        } catch (error) {
+          console.error("Error saving classifications:", error);
+          toast.warning("Upload successful but classifications not saved", {
+            description: `${getFileLabel(
+              fileType
+            )} has been uploaded but auto-classification failed.`,
+          });
+        }
       } else {
         toast.success("Upload successful!", {
           description: `${getFileLabel(
@@ -184,20 +281,7 @@ export default function DataUploadPage() {
     return descriptions[key] || "";
   };
 
-  const handleClassificationSave = (
-    classifications: Record<string, string>
-  ) => {
-    setShowClassificationModal(false);
-    setExtractedCategories([]);
-    toast.success("Classifications saved!", {
-      description: "All client2 users will now use these classifications.",
-    });
-  };
-
-  const handleClassificationClose = () => {
-    setShowClassificationModal(false);
-    setExtractedCategories([]);
-  };
+  // Classification functions removed - now auto-assigned
 
   if (!session) {
     return (
@@ -408,13 +492,7 @@ export default function DataUploadPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Admin Classification Modal */}
-      <AdminClassificationModal
-        isOpen={showClassificationModal}
-        onClose={handleClassificationClose}
-        categories={extractedCategories}
-        onSave={handleClassificationSave}
-      />
+      {/* Classification modal removed - categories are now auto-assigned */}
     </div>
   );
 }
