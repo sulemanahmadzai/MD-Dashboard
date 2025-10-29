@@ -405,9 +405,20 @@ export async function POST(request: NextRequest) {
     let processedData = data;
     let extractedCategories: string[] = [];
 
-    if (fileType === "sgd_transactions" || fileType === "usd_transactions") {
+    if (
+      fileType === "sgd_transactions" ||
+      fileType === "usd_transactions" ||
+      fileType === "sgd_sankey_client3" ||
+      fileType === "usd_sankey_client3"
+    ) {
       try {
-        processedData = processTransactionData(data, fileType);
+        const mappedType =
+          fileType === "sgd_sankey_client3"
+            ? ("sgd_transactions" as const)
+            : fileType === "usd_sankey_client3"
+            ? ("usd_transactions" as const)
+            : (fileType as "sgd_transactions" | "usd_transactions");
+        processedData = processTransactionData(data, mappedType);
       } catch (error: any) {
         return NextResponse.json(
           { error: `Failed to process transaction data: ${error.message}` },

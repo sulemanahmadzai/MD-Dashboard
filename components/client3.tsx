@@ -111,11 +111,22 @@ export default function PLDashboard() {
   ];
 
   const parseValue = (val) => {
-    if (!val) return 0;
+    if (val === null || val === undefined) return 0;
     const str = String(val).trim();
-    const clean = str.replace(/[$,()]/g, "").replace(/\s/g, "");
-    const num = parseFloat(clean) || 0;
-    return str.includes("(") || str.startsWith("-") ? -Math.abs(num) : num;
+    if (str === "") return 0;
+
+    // Detect negatives in common accounting formats: (1,234), -1234, 1234-
+    const isNegative =
+      str.includes("(") || str.startsWith("-") || str.endsWith("-");
+
+    // Remove EVERYTHING except digits and decimal point
+    // This strips currency symbols/codes (e.g., SGD, USD), commas, spaces, etc.
+    const numericOnly = str.replace(/[^0-9.]/g, "");
+
+    const num = parseFloat(numericOnly);
+    if (isNaN(num)) return 0;
+
+    return isNegative ? -Math.abs(num) : num;
   };
 
   const formatCurrency = (amount) => {
@@ -380,15 +391,29 @@ export default function PLDashboard() {
           row["location"] ||
           "";
         const account = row[accountColumn] || "";
-        const inflowOutflow = row["Inflow / Outflow"] || "";
+        const inflowOutflow =
+          row["Inflow / Outflow"] ||
+          row["Inflow/Outflow"] ||
+          row["Type"] ||
+          row["type"] ||
+          "";
 
         if (!account || !account.trim()) return;
 
-        const rowData = {
+        // Normalize Type to 'Inflow' | 'Outflow' when possible
+        let normalizedType = "";
+        if (inflowOutflow && typeof inflowOutflow === "string") {
+          const lo = inflowOutflow.toLowerCase();
+          if (lo.includes("inflow")) normalizedType = "Inflow";
+          else if (lo.includes("outflow")) normalizedType = "Outflow";
+        }
+
+        const rowData: any = {
           Class: classValue,
           Office: office,
           Account: account,
           "Inflow / Outflow": inflowOutflow,
+          Type: normalizedType,
         };
 
         cashflowMonthColumns.forEach((month) => {
@@ -1454,25 +1479,27 @@ export default function PLDashboard() {
 
     console.log("🔍 Debug - getCashflowByType: filteredData", filteredData);
 
-    // Use the actual "Inflow / Outflow" field from the data
+    // Prefer explicit Type or Inflow/Outflow from the data; otherwise, heuristic
     filteredData.forEach((row) => {
       const classValue = row.Class || "";
       const account = row.Account || "";
-      const inflowOutflow = row["Inflow / Outflow"] || "";
+      const rawType =
+        row.Type ||
+        row["type"] ||
+        row["Inflow / Outflow"] ||
+        row["Inflow/Outflow"] ||
+        "";
 
-      console.log(
-        `🔍 Debug - Processing row: Class="${classValue}", Account="${account}", Inflow/Outflow="${inflowOutflow}"`
-      );
+      let typeLabel = "";
+      if (rawType && typeof rawType === "string") {
+        const lo = rawType.toLowerCase();
+        if (lo.includes("inflow")) typeLabel = "Inflow";
+        else if (lo.includes("outflow")) typeLabel = "Outflow";
+      }
 
-      // Use the actual Inflow / Outflow field if available
-      let isInflow = false;
-      if (inflowOutflow) {
-        isInflow =
-          inflowOutflow.toLowerCase().includes("inflow") ||
-          inflowOutflow.toLowerCase().includes("cash inflow");
-      } else {
-        // Fallback to heuristic if no Inflow / Outflow field
-        isInflow =
+      if (!typeLabel) {
+        // Heuristic fallback when explicit type not available
+        const isInflow =
           classValue.toLowerCase().includes("revenue") ||
           classValue.toLowerCase().includes("income") ||
           classValue.toLowerCase().includes("receipt") ||
@@ -1489,17 +1516,11 @@ export default function PLDashboard() {
           account.toLowerCase().includes("credit") ||
           account.toLowerCase().includes("deposit") ||
           account.toLowerCase().includes("payment received");
+        typeLabel = isInflow ? "Inflow" : "Outflow";
       }
 
-      console.log(
-        `🔍 Debug - Row categorized as: ${isInflow ? "Inflow" : "Outflow"}`
-      );
-
-      if (isInflow) {
-        grouped.Inflow.push(row);
-      } else {
-        grouped.Outflow.push(row);
-      }
+      if (typeLabel === "Inflow") grouped.Inflow.push(row);
+      else grouped.Outflow.push(row);
     });
 
     console.log("🔍 Debug - getCashflowByType: final grouped", grouped);
