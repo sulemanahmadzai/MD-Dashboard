@@ -148,6 +148,10 @@ export default function PLDashboard() {
     return `${value}`;
   };
 
+  // Precise arithmetic helpers to avoid floating-point drift in totals
+  const toCents = (n) => Math.round(((n || 0) as number) * 100);
+  const fromCents = (c) => (c || 0) / 100;
+
   const shouldSkipRow = (lineItem) => {
     if (!lineItem) return true;
     const lower = lineItem.toLowerCase().trim();
@@ -637,16 +641,28 @@ export default function PLDashboard() {
 
       if (data && data.transactions) {
         // Transform API data structure to match what the component expects
-        const transformedData = {
+        const items = data.transactions.map((t) => ({
+          id: t.id,
+          Category: t.category,
+          Contact: t.contact,
+          Type: t.type === "inflow" ? "Inflow" : "Outflow",
+          Amount: parseFloat(t.amount),
+          AmountSGD: parseFloat(t.amountSGD || t.amount),
+        }));
+
+        const transformedData: any = {
           ...data,
-          cashflowItems: data.transactions.map((t) => ({
-            id: t.id,
-            Category: t.category,
-            Contact: t.contact,
-            Type: t.type === "inflow" ? "Inflow" : "Outflow",
-            Amount: parseFloat(t.amount),
-            AmountSGD: parseFloat(t.amountSGD || t.amount),
+          cashflowItems: items,
+          cashflowItemsSgd: items.map((it) => ({
+            id: it.id,
+            Category: it.Category,
+            Contact: it.Contact,
+            Type: it.Type,
+            Amount: it.AmountSGD,
           })),
+          // Normalize key so Combined Analysis can read it
+          openingBalanceSgd:
+            data.openingBalanceSGD ?? data.openingBalanceSgd ?? 0,
         };
         setUsdSankeyData(transformedData);
         setUsdOpeningBalance(data.openingBalance || 0);
@@ -656,18 +672,27 @@ export default function PLDashboard() {
         });
       } else if (data && Array.isArray(data)) {
         // Handle case where data is directly an array of transactions
-        const transformedData = {
-          cashflowItems: data.map((t, index) => ({
-            id: t.id || `usd-${index}`,
-            Category: t.category || t.Category || "Uncategorized",
-            Contact: t.contact || t.Contact || "Unknown",
-            Type:
-              t.type === "inflow" || t.Type === "Inflow" ? "Inflow" : "Outflow",
-            Amount: parseFloat(t.amount || t.Amount || 0),
-            AmountSGD: parseFloat(
-              t.amountSGD || t.AmountSGD || t.amount || t.Amount || 0
-            ),
+        const items = data.map((t, index) => ({
+          id: t.id || `usd-${index}`,
+          Category: t.category || t.Category || "Uncategorized",
+          Contact: t.contact || t.Contact || "Unknown",
+          Type:
+            t.type === "inflow" || t.Type === "Inflow" ? "Inflow" : "Outflow",
+          Amount: parseFloat(t.amount || t.Amount || 0),
+          AmountSGD: parseFloat(
+            t.amountSGD || t.AmountSGD || t.amount || t.Amount || 0
+          ),
+        }));
+        const transformedData: any = {
+          cashflowItems: items,
+          cashflowItemsSgd: items.map((it) => ({
+            id: it.id,
+            Category: it.Category,
+            Contact: it.Contact,
+            Type: it.Type,
+            Amount: it.AmountSGD,
           })),
+          openingBalanceSgd: 0,
         };
         setUsdSankeyData(transformedData);
         setUsdOpeningBalance(0); // Default opening balance
@@ -5942,17 +5967,21 @@ export default function PLDashboard() {
               sgdSankeyData.cashflowItems.length > 0 &&
               (() => {
                 try {
-                  const totalInflow = sgdSankeyData.cashflowItems
+                  const inflowCents = sgdSankeyData.cashflowItems
                     .filter((item) => item.Type === "Inflow")
-                    .reduce((sum, item) => sum + (item.Amount || 0), 0);
+                    .reduce((sum, item) => sum + toCents(item.Amount || 0), 0);
 
-                  const totalOutflow = sgdSankeyData.cashflowItems
+                  const outflowCents = sgdSankeyData.cashflowItems
                     .filter((item) => item.Type === "Outflow")
-                    .reduce((sum, item) => sum + (item.Amount || 0), 0);
+                    .reduce((sum, item) => sum + toCents(item.Amount || 0), 0);
 
-                  const closingBalance =
-                    sgdOpeningBalance + totalInflow - totalOutflow;
-                  const totalAvailable = sgdOpeningBalance + totalInflow;
+                  const openingCents = toCents(sgdOpeningBalance);
+                  const totalInflow = fromCents(inflowCents);
+                  const totalOutflow = fromCents(outflowCents);
+                  const closingBalance = fromCents(
+                    openingCents + inflowCents - outflowCents
+                  );
+                  const totalAvailable = fromCents(openingCents + inflowCents);
 
                   // Group inflows by category
                   const inflowsByCategory = {};
@@ -5991,9 +6020,19 @@ export default function PLDashboard() {
                             <h3 className="text-[10px] font-bold mb-1 uppercase tracking-wider opacity-90">
                               Opening Balance
                             </h3>
-                            <p className="text-base font-bold">
-                              {formatCurrency(sgdOpeningBalance)}
-                            </p>
+                            <div className="mt-1">
+                              <input
+                                type="number"
+                                value={sgdOpeningBalance}
+                                onChange={(e) =>
+                                  setSgdOpeningBalance(
+                                    parseFloat(e.target.value) || 0
+                                  )
+                                }
+                                className="w-full px-2 py-1 text-sm text-right text-blue-900 bg-white/90 rounded border-2 border-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                placeholder="0.00"
+                              />
+                            </div>
                           </div>
 
                           <div className="space-y-2 mt-4">
@@ -6036,11 +6075,11 @@ export default function PLDashboard() {
                           </div>
                         </div>
 
-                        {/* Column 2: Total Inflows */}
+                        {/* Column 2: Total Available */}
                         <div className="col-span-2 flex flex-col items-center justify-center py-6">
                           <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-2xl p-4 text-white text-center w-full">
                             <h3 className="text-[10px] font-bold mb-2 uppercase tracking-wider opacity-90">
-                              Total Inflows
+                              Total Available
                             </h3>
                             <p className="text-xl font-bold">
                               {formatCurrency(totalAvailable)}
@@ -6239,17 +6278,23 @@ export default function PLDashboard() {
               usdSankeyData.cashflowItems.length > 0 &&
               (() => {
                 try {
-                  const totalInflow = usdSankeyData.cashflowItems
+                  const inflowCentsUsd = usdSankeyData.cashflowItems
                     .filter((item) => item.Type === "Inflow")
-                    .reduce((sum, item) => sum + (item.Amount || 0), 0);
+                    .reduce((sum, item) => sum + toCents(item.Amount || 0), 0);
 
-                  const totalOutflow = usdSankeyData.cashflowItems
+                  const outflowCentsUsd = usdSankeyData.cashflowItems
                     .filter((item) => item.Type === "Outflow")
-                    .reduce((sum, item) => sum + (item.Amount || 0), 0);
+                    .reduce((sum, item) => sum + toCents(item.Amount || 0), 0);
 
-                  const closingBalance =
-                    usdOpeningBalance + totalInflow - totalOutflow;
-                  const totalAvailable = usdOpeningBalance + totalInflow;
+                  const openingCentsUsd = toCents(usdOpeningBalance);
+                  const totalInflow = fromCents(inflowCentsUsd);
+                  const totalOutflow = fromCents(outflowCentsUsd);
+                  const closingBalance = fromCents(
+                    openingCentsUsd + inflowCentsUsd - outflowCentsUsd
+                  );
+                  const totalAvailable = fromCents(
+                    openingCentsUsd + inflowCentsUsd
+                  );
 
                   // Group inflows by category
                   const inflowsByCategory = {};
@@ -6288,9 +6333,19 @@ export default function PLDashboard() {
                             <h3 className="text-[10px] font-bold mb-1 uppercase tracking-wider opacity-90">
                               Opening Balance
                             </h3>
-                            <p className="text-base font-bold">
-                              {formatCurrency(usdOpeningBalance)}
-                            </p>
+                            <div className="mt-1">
+                              <input
+                                type="number"
+                                value={usdOpeningBalance}
+                                onChange={(e) =>
+                                  setUsdOpeningBalance(
+                                    parseFloat(e.target.value) || 0
+                                  )
+                                }
+                                className="w-full px-2 py-1 text-sm text-right text-blue-900 bg-white/90 rounded border-2 border-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                placeholder="0.00"
+                              />
+                            </div>
                           </div>
 
                           <div className="space-y-2 mt-4">
@@ -6333,11 +6388,11 @@ export default function PLDashboard() {
                           </div>
                         </div>
 
-                        {/* Column 2: Total Inflows */}
+                        {/* Column 2: Total Available */}
                         <div className="col-span-2 flex flex-col items-center justify-center py-6">
                           <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-2xl p-4 text-white text-center w-full">
                             <h3 className="text-[10px] font-bold mb-2 uppercase tracking-wider opacity-90">
-                              Total Inflows
+                              Total Available
                             </h3>
                             <p className="text-xl font-bold">
                               {formatCurrency(totalAvailable)}
@@ -6546,17 +6601,25 @@ export default function PLDashboard() {
                   const combinedOpeningBalance =
                     sgdOpeningBalance + (usdSankeyData.openingBalanceSgd || 0);
 
-                  const totalInflow = combinedItems
+                  const inflowCentsCombined = combinedItems
                     .filter((item) => item.Type === "Inflow")
-                    .reduce((sum, item) => sum + (item.Amount || 0), 0);
+                    .reduce((sum, item) => sum + toCents(item.Amount || 0), 0);
 
-                  const totalOutflow = combinedItems
+                  const outflowCentsCombined = combinedItems
                     .filter((item) => item.Type === "Outflow")
-                    .reduce((sum, item) => sum + (item.Amount || 0), 0);
+                    .reduce((sum, item) => sum + toCents(item.Amount || 0), 0);
 
-                  const closingBalance =
-                    combinedOpeningBalance + totalInflow - totalOutflow;
-                  const totalAvailable = combinedOpeningBalance + totalInflow;
+                  const openingCentsCombined = toCents(combinedOpeningBalance);
+                  const totalInflow = fromCents(inflowCentsCombined);
+                  const totalOutflow = fromCents(outflowCentsCombined);
+                  const closingBalance = fromCents(
+                    openingCentsCombined +
+                      inflowCentsCombined -
+                      outflowCentsCombined
+                  );
+                  const totalAvailable = fromCents(
+                    openingCentsCombined + inflowCentsCombined
+                  );
 
                   // Group inflows by category
                   const inflowsByCategory = {};
@@ -6640,11 +6703,11 @@ export default function PLDashboard() {
                           </div>
                         </div>
 
-                        {/* Column 2: Total Inflows */}
+                        {/* Column 2: Total Available */}
                         <div className="col-span-2 flex flex-col items-center justify-center py-6">
                           <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-2xl p-4 text-white text-center w-full">
                             <h3 className="text-[10px] font-bold mb-2 uppercase tracking-wider opacity-90">
-                              Total Inflows
+                              Total Available
                             </h3>
                             <p className="text-xl font-bold">
                               {formatCurrency(totalAvailable)}
