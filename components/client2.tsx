@@ -8966,10 +8966,9 @@ export default function PLDashboard() {
                                 </button>
                                 <button
                                   onClick={() => {
-                                    setCashTransactions(
-                                      cashTransactions.filter(
-                                        (t) => t.id !== transaction.id
-                                      )
+                                    // Delete from database; list auto-refreshes via React Query
+                                    deleteCashTransaction.mutate(
+                                      transaction.id
                                     );
                                   }}
                                   className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium"
