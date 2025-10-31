@@ -6418,6 +6418,12 @@ export default function PLDashboard() {
                       (d) => d.stage === stage.stage
                     );
 
+                    // Place tooltip above for bottom stages to avoid overlap (e.g., Negotiation)
+                    const placeAbove = index >= funnelData.length - 2;
+                    const positionClass = placeAbove
+                      ? "bottom-full mb-2"
+                      : "top-full mt-2";
+
                     return (
                       <div key={stage.stage} className="mb-2 group relative">
                         <div
@@ -6451,12 +6457,14 @@ export default function PLDashboard() {
 
                           {/* Tooltip on hover */}
                           {stageDeals.length > 0 && (
-                            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[999] pointer-events-none">
-                              <div className="bg-gray-900 text-white rounded-lg shadow-2xl p-4 min-w-[300px] max-w-[400px] border border-gray-700">
+                            <div
+                              className={`absolute left-1/2 -translate-x-1/2 ${positionClass} opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[1000] pointer-events-none`}
+                            >
+                              <div className="bg-gray-900 text-white rounded-lg shadow-2xl p-4 min-w-[300px] max-w-[90vw] border border-gray-700">
                                 <div className="font-bold text-sm mb-2 border-b border-gray-700 pb-2">
                                   {stage.stage} - Deals Breakdown
                                 </div>
-                                <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                                <div className="space-y-2">
                                   {stageDeals.map((deal) => (
                                     <div key={deal.id} className="text-xs py-1">
                                       <div className="font-semibold text-gray-200">
