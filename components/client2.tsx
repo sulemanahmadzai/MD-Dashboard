@@ -6404,7 +6404,7 @@ export default function PLDashboard() {
               <div className="bg-white rounded-2xl shadow-xl p-6 mt-6">
                 <h2 className="text-2xl font-bold mb-6">Pipeline Funnel</h2>
 
-                <div className="max-w-4xl mx-auto relative">
+                <div className="max-w-4xl mx-auto relative overflow-visible">
                   {funnelData.map((stage, index) => {
                     // Calculate width percentage based on position in funnel
                     const maxWidth = 100;
@@ -6419,9 +6419,9 @@ export default function PLDashboard() {
                     );
 
                     return (
-                      <div key={stage.stage} className="mb-2 group">
+                      <div key={stage.stage} className="mb-2 group relative">
                         <div
-                          className="mx-auto transition-all duration-300 hover:scale-105 cursor-pointer relative"
+                          className="mx-auto transition-all duration-300 hover:scale-105 cursor-pointer relative group-hover:z-[150]"
                           style={{ width: `${width}%` }}
                         >
                           <div
@@ -6451,7 +6451,7 @@ export default function PLDashboard() {
 
                           {/* Tooltip on hover */}
                           {stageDeals.length > 0 && (
-                            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[100] pointer-events-none">
+                            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[999] pointer-events-none">
                               <div className="bg-gray-900 text-white rounded-lg shadow-2xl p-4 min-w-[300px] max-w-[400px] border border-gray-700">
                                 <div className="font-bold text-sm mb-2 border-b border-gray-700 pb-2">
                                   {stage.stage} - Deals Breakdown
