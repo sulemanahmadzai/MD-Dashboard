@@ -9685,7 +9685,7 @@ export default function PLDashboard() {
 
               <div className="flex gap-3 mt-6">
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     if (
                       !newProjectCost.monthYear ||
                       !newProjectCost.projectName ||
@@ -9700,18 +9700,37 @@ export default function PLDashboard() {
                       return;
                     }
 
-                    if (editingProjectCost) {
-                      // Update existing project cost in database
-                      updateProjectCost.mutate({
-                        ...newProjectCost,
-                        id: editingProjectCost.id,
-                      });
-                    } else {
-                      // Add new project cost to database
-                      addProjectCost.mutate(newProjectCost);
+                    const costPayload = {
+                      monthYear: newProjectCost.monthYear,
+                      projectName: newProjectCost.projectName,
+                      client: newProjectCost.client,
+                      market: newProjectCost.market,
+                      baseAmountUSD: newProjectCost.baseAmountUSD,
+                      dataUSD: newProjectCost.dataUSD,
+                      totalAmountUSD: newProjectCost.totalAmountUSD,
+                      baseAmountSGD: newProjectCost.baseAmountSGD,
+                      dataSGD: newProjectCost.dataSGD,
+                      totalAmountSGD: newProjectCost.totalAmountSGD,
+                      projectRevenue: newProjectCost.projectRevenue,
+                      costPercentage: newProjectCost.costPercentage,
+                      status: newProjectCost.status,
+                    } as any;
+
+                    try {
+                      if (editingProjectCost) {
+                        await updateProjectCost.mutateAsync({
+                          ...costPayload,
+                          id: editingProjectCost.id,
+                        });
+                      } else {
+                        await addProjectCost.mutateAsync(costPayload);
+                      }
+                      setShowProjectCostModal(false);
+                      setEditingProjectCost(null);
+                    } catch (e: any) {
+                      alert(e?.message || "Failed to save project cost");
+                      return;
                     }
-                    setShowProjectCostModal(false);
-                    setEditingProjectCost(null);
                     setNewProjectCost({
                       monthYear: "",
                       projectName: "",
@@ -10039,7 +10058,7 @@ export default function PLDashboard() {
 
               <div className="flex gap-3 mt-6">
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     if (
                       !newProject.date ||
                       !newProject.clientProject ||
@@ -10052,18 +10071,38 @@ export default function PLDashboard() {
                       return;
                     }
 
-                    if (editingProject) {
-                      // Update existing project in database
-                      updateProject.mutate({
-                        ...newProject,
-                        id: editingProject.id,
-                      });
-                    } else {
-                      // Add new project to database
-                      addProject.mutate(newProject);
+                    const projectPayload = {
+                      date: newProject.date,
+                      clientProject: newProject.clientProject,
+                      projectNumber: newProject.projectNumber,
+                      valueQuoted: newProject.valueQuoted,
+                      quotedCurrency: newProject.quotedCurrency,
+                      valueSGD: newProject.valueSGD,
+                      numberOfStudies: newProject.numberOfStudies,
+                      purchaseOrder: newProject.purchaseOrder,
+                      fieldWorkStatus: newProject.fieldWorkStatus,
+                      fieldWorkStartDate: newProject.fieldWorkStartDate,
+                      fieldWorkEndDate: newProject.fieldWorkEndDate,
+                      reportStatus: newProject.reportStatus,
+                      invoiceStatus: newProject.invoiceStatus,
+                      invoiceDate: newProject.invoiceDate,
+                    } as any;
+
+                    try {
+                      if (editingProject) {
+                        await updateProject.mutateAsync({
+                          ...projectPayload,
+                          id: editingProject.id,
+                        });
+                      } else {
+                        await addProject.mutateAsync(projectPayload);
+                      }
+                      setShowProjectModal(false);
+                      setEditingProject(null);
+                    } catch (e: any) {
+                      alert(e?.message || "Failed to save project");
+                      return;
                     }
-                    setShowProjectModal(false);
-                    setEditingProject(null);
                     setNewProject({
                       date: "",
                       clientProject: "",
