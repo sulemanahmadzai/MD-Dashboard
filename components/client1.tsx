@@ -2862,6 +2862,475 @@ export default function OrderUnifier() {
                         </div>
                       </div>
                     </div>
+
+                    <div className="overflow-x-auto mb-8">
+                      <h4 className="text-lg font-semibold mb-4">
+                        Monthly Repeat Purchase Rate by Channel
+                      </h4>
+                      <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-200 mb-4">
+                        <h5 className="font-semibold text-purple-900 mb-2">
+                          Understanding Repeat Purchase Rate
+                        </h5>
+                        <p className="text-sm text-purple-800 mb-2">
+                          <strong>
+                            Repeat Purchase Rate = (Repeat Customers ÷ Total
+                            Customers) × 100
+                          </strong>
+                        </p>
+                        <p className="text-xs text-purple-700">
+                          For each month, this shows what percentage of
+                          customers are repeat buyers (had purchased before).
+                          Higher rates indicate stronger customer loyalty and
+                          retention.
+                        </p>
+                      </div>
+                      <table className="w-full">
+                        <thead className="bg-gray-100">
+                          <tr>
+                            <th
+                              className="px-4 py-3 text-left text-sm font-semibold"
+                              rowSpan="2"
+                            >
+                              Month
+                            </th>
+                            <th
+                              className="px-4 py-3 text-center text-sm font-semibold bg-green-50 border-b"
+                              colSpan="4"
+                            >
+                              Shopify
+                            </th>
+                            <th
+                              className="px-4 py-3 text-center text-sm font-semibold bg-blue-50 border-b"
+                              colSpan="4"
+                            >
+                              TikTok
+                            </th>
+                            <th
+                              className="px-4 py-3 text-center text-sm font-semibold bg-purple-50 border-b"
+                              colSpan="4"
+                            >
+                              Overall
+                            </th>
+                          </tr>
+                          <tr className="bg-gray-50">
+                            <th className="px-3 py-2 text-center text-xs font-semibold bg-green-50">
+                              Total
+                            </th>
+                            <th className="px-3 py-2 text-center text-xs font-semibold bg-green-50">
+                              New
+                            </th>
+                            <th className="px-3 py-2 text-center text-xs font-semibold bg-green-50">
+                              Repeat
+                            </th>
+                            <th className="px-3 py-2 text-center text-xs font-semibold bg-green-50 border-r">
+                              Rate
+                            </th>
+                            <th className="px-3 py-2 text-center text-xs font-semibold bg-blue-50">
+                              Total
+                            </th>
+                            <th className="px-3 py-2 text-center text-xs font-semibold bg-blue-50">
+                              New
+                            </th>
+                            <th className="px-3 py-2 text-center text-xs font-semibold bg-blue-50">
+                              Repeat
+                            </th>
+                            <th className="px-3 py-2 text-center text-xs font-semibold bg-blue-50 border-r">
+                              Rate
+                            </th>
+                            <th className="px-3 py-2 text-center text-xs font-semibold bg-purple-50">
+                              Total
+                            </th>
+                            <th className="px-3 py-2 text-center text-xs font-semibold bg-purple-50">
+                              New
+                            </th>
+                            <th className="px-3 py-2 text-center text-xs font-semibold bg-purple-50">
+                              Repeat
+                            </th>
+                            <th className="px-3 py-2 text-center text-xs font-semibold bg-purple-50">
+                              Rate
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {(() => {
+                            const monthlyRepeatData = {};
+
+                            // Track customer first purchase by platform
+                            const customerFirstPurchase = {
+                              Shopify: {},
+                              TikTok: {},
+                              Overall: {},
+                            };
+
+                            // First pass: find first purchase date for each customer
+                            dashboardData.masterData?.forEach((order) => {
+                              const email =
+                                order.Customer_Email?.toLowerCase().trim();
+                              const orderDate = order.Created_At;
+                              const platform = order.Platform;
+
+                              if (email && orderDate && order.Total > 0) {
+                                const date = new Date(orderDate);
+                                if (!isNaN(date.getTime())) {
+                                  // Track by platform
+                                  if (
+                                    !customerFirstPurchase[platform][email] ||
+                                    date <
+                                      customerFirstPurchase[platform][email]
+                                  ) {
+                                    customerFirstPurchase[platform][email] =
+                                      date;
+                                  }
+                                  // Track overall
+                                  if (
+                                    !customerFirstPurchase.Overall[email] ||
+                                    date < customerFirstPurchase.Overall[email]
+                                  ) {
+                                    customerFirstPurchase.Overall[email] = date;
+                                  }
+                                }
+                              }
+                            });
+
+                            // Second pass: categorize each order as new or repeat
+                            dashboardData.masterData?.forEach((order) => {
+                              const email =
+                                order.Customer_Email?.toLowerCase().trim();
+                              const orderDate = order.Created_At;
+                              const platform = order.Platform;
+
+                              if (email && orderDate && order.Total > 0) {
+                                const date = new Date(orderDate);
+                                if (!isNaN(date.getTime())) {
+                                  const monthKey = `${date.getFullYear()}-${String(
+                                    date.getMonth() + 1
+                                  ).padStart(2, "0")}`;
+
+                                  if (!monthlyRepeatData[monthKey]) {
+                                    monthlyRepeatData[monthKey] = {
+                                      Shopify: {
+                                        customers: new Set(),
+                                        newCustomers: new Set(),
+                                        repeatCustomers: new Set(),
+                                      },
+                                      TikTok: {
+                                        customers: new Set(),
+                                        newCustomers: new Set(),
+                                        repeatCustomers: new Set(),
+                                      },
+                                      Overall: {
+                                        customers: new Set(),
+                                        newCustomers: new Set(),
+                                        repeatCustomers: new Set(),
+                                      },
+                                    };
+                                  }
+
+                                  // Platform-specific tracking
+                                  monthlyRepeatData[monthKey][
+                                    platform
+                                  ].customers.add(email);
+
+                                  const firstPurchaseDate =
+                                    customerFirstPurchase[platform][email];
+                                  const firstPurchaseMonth = `${firstPurchaseDate.getFullYear()}-${String(
+                                    firstPurchaseDate.getMonth() + 1
+                                  ).padStart(2, "0")}`;
+
+                                  if (firstPurchaseMonth === monthKey) {
+                                    monthlyRepeatData[monthKey][
+                                      platform
+                                    ].newCustomers.add(email);
+                                  } else {
+                                    monthlyRepeatData[monthKey][
+                                      platform
+                                    ].repeatCustomers.add(email);
+                                  }
+
+                                  // Overall tracking
+                                  monthlyRepeatData[
+                                    monthKey
+                                  ].Overall.customers.add(email);
+
+                                  const overallFirstPurchaseDate =
+                                    customerFirstPurchase.Overall[email];
+                                  const overallFirstPurchaseMonth = `${overallFirstPurchaseDate.getFullYear()}-${String(
+                                    overallFirstPurchaseDate.getMonth() + 1
+                                  ).padStart(2, "0")}`;
+
+                                  if (overallFirstPurchaseMonth === monthKey) {
+                                    monthlyRepeatData[
+                                      monthKey
+                                    ].Overall.newCustomers.add(email);
+                                  } else {
+                                    monthlyRepeatData[
+                                      monthKey
+                                    ].Overall.repeatCustomers.add(email);
+                                  }
+                                }
+                              }
+                            });
+
+                            const sortedMonths = Object.keys(monthlyRepeatData)
+                              .sort()
+                              .reverse();
+
+                            const rows = sortedMonths.map((monthKey, idx) => {
+                              const data = monthlyRepeatData[monthKey];
+
+                              const [year, month] = monthKey.split("-");
+                              const monthName = new Date(
+                                year,
+                                parseInt(month) - 1
+                              ).toLocaleString("default", {
+                                month: "long",
+                                year: "numeric",
+                              });
+
+                              const shopifyTotal = data.Shopify.customers.size;
+                              const shopifyNew = data.Shopify.newCustomers.size;
+                              const shopifyRepeat =
+                                data.Shopify.repeatCustomers.size;
+                              const shopifyRate =
+                                shopifyTotal > 0
+                                  ? (shopifyRepeat / shopifyTotal) * 100
+                                  : 0;
+
+                              const tiktokTotal = data.TikTok.customers.size;
+                              const tiktokNew = data.TikTok.newCustomers.size;
+                              const tiktokRepeat =
+                                data.TikTok.repeatCustomers.size;
+                              const tiktokRate =
+                                tiktokTotal > 0
+                                  ? (tiktokRepeat / tiktokTotal) * 100
+                                  : 0;
+
+                              const overallTotal = data.Overall.customers.size;
+                              const overallNew = data.Overall.newCustomers.size;
+                              const overallRepeat =
+                                data.Overall.repeatCustomers.size;
+                              const overallRate =
+                                overallTotal > 0
+                                  ? (overallRepeat / overallTotal) * 100
+                                  : 0;
+
+                              return (
+                                <tr key={idx} className="hover:bg-gray-50">
+                                  <td className="px-4 py-3 text-sm font-medium">
+                                    {monthName}
+                                  </td>
+                                  <td className="px-3 py-3 text-sm text-center bg-green-50">
+                                    {shopifyTotal}
+                                  </td>
+                                  <td className="px-3 py-3 text-sm text-center bg-green-50">
+                                    {shopifyNew}
+                                  </td>
+                                  <td className="px-3 py-3 text-sm text-center bg-green-50">
+                                    {shopifyRepeat}
+                                  </td>
+                                  <td className="px-3 py-3 text-sm text-center bg-green-50 border-r">
+                                    <span
+                                      className={`px-2 py-1 rounded text-xs font-medium ${
+                                        shopifyRate >= 30
+                                          ? "bg-green-100 text-green-800"
+                                          : shopifyRate >= 15
+                                          ? "bg-yellow-100 text-yellow-800"
+                                          : "bg-red-100 text-red-800"
+                                      }`}
+                                    >
+                                      {shopifyRate.toFixed(1)}%
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-3 text-sm text-center bg-blue-50">
+                                    {tiktokTotal}
+                                  </td>
+                                  <td className="px-3 py-3 text-sm text-center bg-blue-50">
+                                    {tiktokNew}
+                                  </td>
+                                  <td className="px-3 py-3 text-sm text-center bg-blue-50">
+                                    {tiktokRepeat}
+                                  </td>
+                                  <td className="px-3 py-3 text-sm text-center bg-blue-50 border-r">
+                                    <span
+                                      className={`px-2 py-1 rounded text-xs font-medium ${
+                                        tiktokRate >= 30
+                                          ? "bg-green-100 text-green-800"
+                                          : tiktokRate >= 15
+                                          ? "bg-yellow-100 text-yellow-800"
+                                          : "bg-red-100 text-red-800"
+                                      }`}
+                                    >
+                                      {tiktokRate.toFixed(1)}%
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-3 text-sm text-center font-medium bg-purple-50">
+                                    {overallTotal}
+                                  </td>
+                                  <td className="px-3 py-3 text-sm text-center font-medium bg-purple-50">
+                                    {overallNew}
+                                  </td>
+                                  <td className="px-3 py-3 text-sm text-center font-medium bg-purple-50">
+                                    {overallRepeat}
+                                  </td>
+                                  <td className="px-3 py-3 text-sm text-center font-medium bg-purple-50">
+                                    <span
+                                      className={`px-2 py-1 rounded text-xs font-medium ${
+                                        overallRate >= 30
+                                          ? "bg-green-100 text-green-800"
+                                          : overallRate >= 15
+                                          ? "bg-yellow-100 text-yellow-800"
+                                          : "bg-red-100 text-red-800"
+                                      }`}
+                                    >
+                                      {overallRate.toFixed(1)}%
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            });
+
+                            // Add YTD total row
+                            const ytdShopifyTotal = new Set();
+                            const ytdShopifyNew = new Set();
+                            const ytdShopifyRepeat = new Set();
+                            const ytdTikTokTotal = new Set();
+                            const ytdTikTokNew = new Set();
+                            const ytdTikTokRepeat = new Set();
+                            const ytdOverallTotal = new Set();
+                            const ytdOverallNew = new Set();
+                            const ytdOverallRepeat = new Set();
+
+                            sortedMonths.forEach((monthKey) => {
+                              const data = monthlyRepeatData[monthKey];
+                              data.Shopify.customers.forEach((c) =>
+                                ytdShopifyTotal.add(c)
+                              );
+                              data.Shopify.newCustomers.forEach((c) =>
+                                ytdShopifyNew.add(c)
+                              );
+                              data.Shopify.repeatCustomers.forEach((c) =>
+                                ytdShopifyRepeat.add(c)
+                              );
+                              data.TikTok.customers.forEach((c) =>
+                                ytdTikTokTotal.add(c)
+                              );
+                              data.TikTok.newCustomers.forEach((c) =>
+                                ytdTikTokNew.add(c)
+                              );
+                              data.TikTok.repeatCustomers.forEach((c) =>
+                                ytdTikTokRepeat.add(c)
+                              );
+                              data.Overall.customers.forEach((c) =>
+                                ytdOverallTotal.add(c)
+                              );
+                              data.Overall.newCustomers.forEach((c) =>
+                                ytdOverallNew.add(c)
+                              );
+                              data.Overall.repeatCustomers.forEach((c) =>
+                                ytdOverallRepeat.add(c)
+                              );
+                            });
+
+                            const ytdShopifyRate =
+                              ytdShopifyTotal.size > 0
+                                ? (ytdShopifyRepeat.size /
+                                    ytdShopifyTotal.size) *
+                                  100
+                                : 0;
+                            const ytdTikTokRate =
+                              ytdTikTokTotal.size > 0
+                                ? (ytdTikTokRepeat.size / ytdTikTokTotal.size) *
+                                  100
+                                : 0;
+                            const ytdOverallRate =
+                              ytdOverallTotal.size > 0
+                                ? (ytdOverallRepeat.size /
+                                    ytdOverallTotal.size) *
+                                  100
+                                : 0;
+
+                            rows.push(
+                              <tr
+                                key="ytd"
+                                className="bg-indigo-600 text-white font-bold border-t-2"
+                              >
+                                <td className="px-4 py-3 text-sm">YTD TOTAL</td>
+                                <td className="px-3 py-3 text-sm text-center">
+                                  {ytdShopifyTotal.size}
+                                </td>
+                                <td className="px-3 py-3 text-sm text-center">
+                                  {ytdShopifyNew.size}
+                                </td>
+                                <td className="px-3 py-3 text-sm text-center">
+                                  {ytdShopifyRepeat.size}
+                                </td>
+                                <td className="px-3 py-3 text-sm text-center border-r bg-indigo-700">
+                                  {ytdShopifyRate.toFixed(1)}%
+                                </td>
+                                <td className="px-3 py-3 text-sm text-center">
+                                  {ytdTikTokTotal.size}
+                                </td>
+                                <td className="px-3 py-3 text-sm text-center">
+                                  {ytdTikTokNew.size}
+                                </td>
+                                <td className="px-3 py-3 text-sm text-center">
+                                  {ytdTikTokRepeat.size}
+                                </td>
+                                <td className="px-3 py-3 text-sm text-center border-r bg-indigo-700">
+                                  {ytdTikTokRate.toFixed(1)}%
+                                </td>
+                                <td className="px-3 py-3 text-sm text-center">
+                                  {ytdOverallTotal.size}
+                                </td>
+                                <td className="px-3 py-3 text-sm text-center">
+                                  {ytdOverallNew.size}
+                                </td>
+                                <td className="px-3 py-3 text-sm text-center">
+                                  {ytdOverallRepeat.size}
+                                </td>
+                                <td className="px-3 py-3 text-sm text-center bg-indigo-700">
+                                  {ytdOverallRate.toFixed(1)}%
+                                </td>
+                              </tr>
+                            );
+
+                            return rows;
+                          })()}
+                        </tbody>
+                      </table>
+
+                      <div className="mt-6 bg-purple-50 rounded-lg p-4 border border-purple-200">
+                        <h5 className="font-semibold text-purple-900 mb-2">
+                          Interpreting Repeat Purchase Rates
+                        </h5>
+                        <div className="text-xs text-purple-800 space-y-1">
+                          <p>
+                            • <strong>Total:</strong> Unique customers who
+                            purchased in that month
+                          </p>
+                          <p>
+                            • <strong>New:</strong> Customers making their first
+                            purchase ever in that month
+                          </p>
+                          <p>
+                            • <strong>Repeat:</strong> Customers who had
+                            purchased before that month
+                          </p>
+                          <p>
+                            • <strong>Rate:</strong> (Repeat ÷ Total) × 100 -
+                            Higher is better
+                          </p>
+                          <p className="pt-2 border-t border-purple-200 mt-2">
+                            <strong>Benchmarks:</strong> 30%+ is excellent,
+                            15-30% is good, below 15% needs improvement
+                          </p>
+                          <p>
+                            • YTD Total shows cumulative unique customers across
+                            all months (not a sum of monthly totals)
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 );
               })()}
@@ -2932,6 +3401,150 @@ export default function OrderUnifier() {
                 const clv =
                   avgPurchaseValue * purchaseFrequency * avgLifespanMonths;
 
+                // Calculate 3-year LTV
+                const threeYearLTV = avgPurchaseValue * purchaseFrequency * 36;
+
+                // Calculate GP (Gross Profit) and CAC from financials
+                let grossProfit = 0;
+                let totalMarketingExpenses = 0;
+                if (dashboardData.plData) {
+                  const accountColumn = dashboardData.plData.accountColumn;
+                  const allColumns = Object.keys(dashboardData.plData[0] || {});
+                  const months = allColumns.slice(1, 13);
+
+                  const incomeCategories = [
+                    "Shopify - Income",
+                    "TikTok - Income",
+                  ];
+                  const discountCategories = [
+                    "Shopify Discounts",
+                    "TikTok Discounts",
+                  ];
+                  const merchantFeeCategories = ["Merchant Fees"];
+
+                  const plMappings = dashboardData.plData.mappings || {};
+
+                  const monthlyData = {};
+                  months.forEach((month) => {
+                    const categories = {};
+                    dashboardData.plData.forEach((row) => {
+                      const lineItem = row[accountColumn];
+                      if (!lineItem) return;
+                      const category = plMappings[lineItem] || "Uncategorized";
+                      const value =
+                        parseFloat(
+                          String(row[month] || "0").replace(/[^0-9.-]/g, "")
+                        ) || 0;
+                      categories[category] =
+                        (categories[category] || 0) + value;
+                    });
+                    monthlyData[month] = categories;
+                  });
+
+                  const totalGrossRevenue = months.reduce((sum, month) => {
+                    return (
+                      sum +
+                      incomeCategories.reduce(
+                        (catSum, cat) =>
+                          catSum + (monthlyData[month]?.[cat] || 0),
+                        0
+                      )
+                    );
+                  }, 0);
+
+                  const totalOtherIncome = months.reduce(
+                    (sum, month) =>
+                      sum + (monthlyData[month]?.["Other Income"] || 0),
+                    0
+                  );
+                  const totalDiscounts = months.reduce((sum, month) => {
+                    return (
+                      sum +
+                      discountCategories.reduce(
+                        (catSum, cat) =>
+                          catSum + (monthlyData[month]?.[cat] || 0),
+                        0
+                      )
+                    );
+                  }, 0);
+
+                  const totalRevenue =
+                    totalGrossRevenue + totalOtherIncome + totalDiscounts;
+
+                  const totalCOGS = months.reduce(
+                    (sum, month) =>
+                      sum + (monthlyData[month]?.["Cost of Goods Sold"] || 0),
+                    0
+                  );
+                  const totalInwardShipping = months.reduce(
+                    (sum, month) =>
+                      sum + (monthlyData[month]?.["Inward Shipping"] || 0),
+                    0
+                  );
+                  const totalOutwardShipping = months.reduce(
+                    (sum, month) =>
+                      sum + (monthlyData[month]?.["Outward Shipping"] || 0),
+                    0
+                  );
+                  const totalMerchantFees = months.reduce((sum, month) => {
+                    return (
+                      sum +
+                      merchantFeeCategories.reduce(
+                        (catSum, cat) =>
+                          catSum + (monthlyData[month]?.[cat] || 0),
+                        0
+                      )
+                    );
+                  }, 0);
+
+                  const totalCOGSWithShipping =
+                    totalCOGS +
+                    totalInwardShipping +
+                    totalOutwardShipping +
+                    totalMerchantFees;
+                  grossProfit = totalRevenue - totalCOGSWithShipping;
+
+                  // Calculate total marketing expenses for CAC
+                  totalMarketingExpenses = months.reduce(
+                    (sum, month) =>
+                      sum + (monthlyData[month]?.["Marketing Expenses"] || 0),
+                    0
+                  );
+                }
+
+                // Calculate total new customers for CAC
+                let totalNewCustomers = 0;
+                if (dashboardData.masterData) {
+                  const existingCustomers = new Set();
+                  dashboardData.masterData.forEach((order) => {
+                    const customerId = order.Customer_Email?.toLowerCase().trim();
+                    if (customerId && order.Total > 0) existingCustomers.add(customerId);
+                  });
+                  totalNewCustomers = existingCustomers.size;
+                }
+
+                // Add subscription customers
+                if (dashboardData.subscriptionData) {
+                  const existingCustomers = new Set();
+                  if (dashboardData.masterData) {
+                    dashboardData.masterData.forEach((order) => {
+                      const customerId = order.Customer_Email?.toLowerCase().trim();
+                      if (customerId && order.Total > 0) existingCustomers.add(customerId);
+                    });
+                  }
+                  dashboardData.subscriptionData.forEach((sub) => {
+                    const email = sub.email?.toLowerCase().trim();
+                    if (email) existingCustomers.add(email);
+                  });
+                  totalNewCustomers = existingCustomers.size;
+                }
+
+                const cac = totalNewCustomers > 0 ? totalMarketingExpenses / totalNewCustomers : 0;
+
+                // Calculate ratios
+                const ltvToGP = grossProfit > 0 ? clv / grossProfit : 0;
+                const ltvToCAC = cac > 0 ? clv / cac : 0;
+
                 return (
                   <div>
                     <h3 className="text-xl font-semibold mb-6">
@@ -2939,17 +3552,30 @@ export default function OrderUnifier() {
                     </h3>
                     <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-6 border border-indigo-200 mb-6">
                       <h4 className="text-lg font-semibold text-indigo-900 mb-3">
-                        How We Calculate CLV
+                        How We Calculate CLV, LTV & Efficiency Ratios
                       </h4>
                       <p className="text-gray-700 mb-3">
                         Customer Lifetime Value (CLV) represents the total
                         revenue you can expect from a customer throughout their
-                        relationship with your business.
+                        relationship with your business. 3-Year LTV projects the
+                        value if you retain customers for 3 years. The
+                        efficiency ratios measure profitability and acquisition
+                        effectiveness.
                       </p>
-                      <div className="bg-white rounded-lg p-4">
-                        <p className="font-mono text-sm text-indigo-600 mb-2">
+                      <div className="bg-white rounded-lg p-4 space-y-2">
+                        <p className="font-mono text-sm text-indigo-600">
                           CLV = (Average Purchase Value) × (Purchase Frequency)
                           × (Average Customer Lifespan)
+                        </p>
+                        <p className="font-mono text-sm text-purple-600">
+                          3-Year LTV = (Average Purchase Value) × (Purchase
+                          Frequency) × 36 months
+                        </p>
+                        <p className="font-mono text-sm text-orange-600">
+                          LTV : GP = CLV ÷ Gross Profit
+                        </p>
+                        <p className="font-mono text-sm text-blue-600">
+                          LTV : CAC = CLV ÷ Customer Acquisition Cost
                         </p>
                         <div className="text-xs text-gray-600 mt-2 space-y-1">
                           <p>
@@ -2965,12 +3591,29 @@ export default function OrderUnifier() {
                             Average time between first order and cancellation
                             (in months)
                           </p>
+                          <p>
+                            • <strong>3-Year LTV:</strong> Projected value
+                            assuming 36-month retention
+                          </p>
+                          <p>
+                            • <strong>LTV : GP Ratio:</strong> How much customer
+                            value you generate per dollar of gross profit
+                          </p>
+                          <p>
+                            • <strong>LTV : CAC Ratio:</strong> How much
+                            customer value you get per dollar spent on
+                            acquisition
+                          </p>
+                          <p>
+                            • <strong>CAC:</strong> Total Marketing Expenses ÷
+                            Total New Customers
+                          </p>
                         </div>
                       </div>
                     </div>
 
                     <div className="space-y-6">
-                      <div className="grid md:grid-cols-4 gap-4">
+                      <div className="grid md:grid-cols-5 gap-4">
                         <div className="bg-white rounded-lg p-4 border-2 border-indigo-300">
                           <div className="text-sm text-indigo-700 mb-1">
                             Avg Purchase Value
@@ -3012,8 +3655,254 @@ export default function OrderUnifier() {
                             {formatCurrency(clv)}
                           </div>
                           <div className="text-xs opacity-80 mt-1">
-                            Per customer
+                            Actual CLV
                           </div>
+                        </div>
+                        <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg p-4 text-white">
+                          <div className="text-sm opacity-90 mb-1">
+                            3-Year LTV
+                          </div>
+                          <div className="text-2xl font-bold">
+                            {formatCurrency(threeYearLTV)}
+                          </div>
+                          <div className="text-xs opacity-80 mt-1">
+                            36-month projection
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid md:grid-cols-2 gap-4">
+                        {dashboardData.plData && grossProfit > 0 ? (
+                          <div className="bg-gradient-to-br from-orange-500 to-red-600 rounded-lg p-4 text-white">
+                            <div className="text-sm opacity-90 mb-1">
+                              LTV : GP Ratio
+                            </div>
+                            <div className="text-2xl font-bold">
+                              {ltvToGP.toFixed(2)}x
+                            </div>
+                            <div className="text-xs opacity-80 mt-1">
+                              {formatCurrency(clv)} CLV ÷{" "}
+                              {formatCurrency(grossProfit)} GP
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-gradient-to-br from-gray-400 to-gray-500 rounded-lg p-4 text-white">
+                            <div className="text-sm opacity-90 mb-1">
+                              LTV : GP Ratio
+                            </div>
+                            <div className="text-2xl font-bold">N/A</div>
+                            <div className="text-xs opacity-80 mt-1">
+                              Upload P&L data to calculate
+                            </div>
+                          </div>
+                        )}
+                        {dashboardData.plData &&
+                        totalMarketingExpenses > 0 &&
+                        totalNewCustomers > 0 ? (
+                          <div className="bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg p-4 text-white">
+                            <div className="text-sm opacity-90 mb-1">
+                              LTV : CAC Ratio
+                            </div>
+                            <div className="text-2xl font-bold">
+                              {ltvToCAC.toFixed(2)}x
+                            </div>
+                            <div className="text-xs opacity-80 mt-1">
+                              {formatCurrency(clv)} CLV ÷ {formatCurrency(cac)}{" "}
+                              CAC
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-gradient-to-br from-gray-400 to-gray-500 rounded-lg p-4 text-white">
+                            <div className="text-sm opacity-90 mb-1">
+                              LTV : CAC Ratio
+                            </div>
+                            <div className="text-2xl font-bold">N/A</div>
+                            <div className="text-xs opacity-80 mt-1">
+                              {!dashboardData.plData
+                                ? "Upload P&L data to calculate"
+                                : "Upload order data to calculate"}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-6 border border-orange-200">
+                        <h4 className="text-lg font-semibold text-orange-900 mb-3">
+                          Understanding LTV : GP and LTV : CAC Ratios
+                        </h4>
+                        <div className="grid md:grid-cols-2 gap-4">
+                          <div className="bg-white rounded-lg p-4 border border-orange-200">
+                            <h5 className="font-semibold text-orange-900 mb-2">
+                              LTV : GP Ratio
+                            </h5>
+                            {dashboardData.plData && grossProfit > 0 ? (
+                              <>
+                                <p className="text-sm text-gray-700 mb-2">
+                                  <strong>{ltvToGP.toFixed(2)}x</strong> (
+                                  {formatCurrency(clv)} ÷{" "}
+                                  {formatCurrency(grossProfit)})
+                                </p>
+                                <p className="text-xs text-gray-600 mb-2">
+                                  Shows how much customer lifetime value you
+                                  generate for every dollar of gross profit.
+                                  Higher ratios indicate better value creation
+                                  from your profit base.
+                                </p>
+                                <div className="text-xs">
+                                  <span
+                                    className={`px-2 py-1 rounded ${
+                                      ltvToGP >= 0.5
+                                        ? "bg-green-100 text-green-800"
+                                        : ltvToGP >= 0.33
+                                        ? "bg-yellow-100 text-yellow-800"
+                                        : ltvToGP >= 0.2
+                                        ? "bg-orange-100 text-orange-800"
+                                        : "bg-red-100 text-red-800"
+                                    }`}
+                                  >
+                                    {ltvToGP >= 0.5
+                                      ? "Excellent (0.5x+)"
+                                      : ltvToGP >= 0.33
+                                      ? "Good (0.33-0.5x)"
+                                      : ltvToGP >= 0.2
+                                      ? "Fair (0.2-0.33x)"
+                                      : "Needs Improvement (<0.2x)"}
+                                  </span>
+                                </div>
+                              </>
+                            ) : (
+                              <p className="text-sm text-gray-600 italic">
+                                Upload P&L data in the Financials tab to see
+                                this ratio. LTV : GP shows how efficiently you
+                                convert profit into customer value.
+                              </p>
+                            )}
+                          </div>
+                          <div className="bg-white rounded-lg p-4 border border-blue-200">
+                            <h5 className="font-semibold text-blue-900 mb-2">
+                              LTV : CAC Ratio
+                            </h5>
+                            {dashboardData.plData &&
+                            totalMarketingExpenses > 0 &&
+                            totalNewCustomers > 0 ? (
+                              <>
+                                <p className="text-sm text-gray-700 mb-2">
+                                  <strong>{ltvToCAC.toFixed(2)}x</strong> (
+                                  {formatCurrency(clv)} ÷ {formatCurrency(cac)})
+                                </p>
+                                <p className="text-xs text-gray-600 mb-2">
+                                  The gold standard SaaS metric. Shows how much
+                                  customer value you get for every dollar spent
+                                  acquiring customers. Essential for sustainable
+                                  growth.
+                                </p>
+                                <div className="text-xs">
+                                  <span
+                                    className={`px-2 py-1 rounded ${
+                                      ltvToCAC >= 3
+                                        ? "bg-green-100 text-green-800"
+                                        : ltvToCAC >= 1
+                                        ? "bg-yellow-100 text-yellow-800"
+                                        : "bg-red-100 text-red-800"
+                                    }`}
+                                  >
+                                    {ltvToCAC >= 3
+                                      ? "Excellent (3x+) - Healthy business"
+                                      : ltvToCAC >= 1
+                                      ? "Acceptable (1-3x) - Needs improvement"
+                                      : "Critical (<1x) - Losing money"}
+                                  </span>
+                                </div>
+                              </>
+                            ) : (
+                              <p className="text-sm text-gray-600 italic">
+                                Upload P&L data and order data to see this
+                                ratio. LTV : CAC is the most important metric
+                                for measuring acquisition efficiency.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-orange-200">
+                          <p className="text-sm text-orange-800 mb-2">
+                            <strong>Key Insights:</strong>
+                          </p>
+                          <div className="text-xs text-gray-700 space-y-1">
+                            <p>
+                              • <strong>LTV : GP</strong> measures profitability
+                              efficiency - how well you convert profit into
+                              customer relationships
+                            </p>
+                            <p>
+                              • <strong>LTV : CAC</strong> is the holy grail
+                              metric for sustainable growth - shows if you're
+                              spending wisely on customer acquisition
+                            </p>
+                            <p>
+                              • A 3:1 LTV:CAC ratio means every $1 spent on
+                              marketing returns $3 in customer value - the
+                              minimum for a healthy business
+                            </p>
+                            <p>
+                              • If LTV : CAC is below 1x, you're losing money on
+                              every customer acquired - immediate action needed
+                            </p>
+                            <p>
+                              • Current CAC:{" "}
+                              {cac > 0 ? formatCurrency(cac) : "N/A"} (Marketing
+                              Expenses ÷ New Customers)
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6 border border-green-200">
+                        <h4 className="text-lg font-semibold text-green-900 mb-3">
+                          Understanding CLV vs 3-Year LTV
+                        </h4>
+                        <div className="grid md:grid-cols-2 gap-4">
+                          <div className="bg-white rounded-lg p-4 border border-indigo-200">
+                            <h5 className="font-semibold text-indigo-900 mb-2">
+                              CLV (Customer Lifetime Value)
+                            </h5>
+                            <p className="text-sm text-gray-700 mb-2">
+                              <strong>{formatCurrency(clv)}</strong>
+                            </p>
+                            <p className="text-xs text-gray-600">
+                              Based on your actual average customer lifespan of{" "}
+                              {avgLifespanMonths.toFixed(1)} months. This
+                              reflects your current customer retention
+                              performance.
+                            </p>
+                          </div>
+                          <div className="bg-white rounded-lg p-4 border border-green-200">
+                            <h5 className="font-semibold text-green-900 mb-2">
+                              3-Year LTV (Lifetime Value)
+                            </h5>
+                            <p className="text-sm text-gray-700 mb-2">
+                              <strong>{formatCurrency(threeYearLTV)}</strong>
+                            </p>
+                            <p className="text-xs text-gray-600">
+                              Projected value if you retain customers for 36
+                              months. This represents your potential revenue with
+                              improved retention strategies.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-green-200">
+                          <p className="text-sm text-green-800">
+                            <strong>Gap Analysis:</strong> The difference of{" "}
+                            {formatCurrency(Math.abs(threeYearLTV - clv))}{" "}
+                            represents{" "}
+                            {threeYearLTV > clv
+                              ? "potential upside"
+                              : "current overperformance"}{" "}
+                            if customer retention{" "}
+                            {threeYearLTV > clv
+                              ? "improves to 3 years"
+                              : "maintains current levels"}
+                            .
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -3908,16 +4797,27 @@ export default function OrderUnifier() {
                       Financial Performance
                     </h3>
                     <div className="space-y-6">
-                      <div className="grid grid-cols-3 gap-4">
+                      <div className="grid grid-cols-4 gap-4">
+                        <div className="bg-gradient-to-br from-emerald-400 to-green-500 rounded-lg p-4 text-white">
+                          <div className="text-xs opacity-90 mb-1">
+                            Total Gross Revenue
+                          </div>
+                          <div className="text-xl font-bold">
+                            {formatCurrency(totalGrossRevenue)}
+                          </div>
+                          <div className="text-xs opacity-80 mt-1">
+                            Before discounts
+                          </div>
+                        </div>
                         <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg p-4 text-white">
                           <div className="text-xs opacity-90 mb-1">
-                            Total Revenue
+                            Total Net Revenue
                           </div>
                           <div className="text-xl font-bold">
                             {formatCurrency(totalRevenue)}
                           </div>
                           <div className="text-xs opacity-80 mt-1">
-                            Year to date
+                            After discounts
                           </div>
                         </div>
                         <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg p-4 text-white">
