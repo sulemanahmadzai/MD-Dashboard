@@ -4,6 +4,11 @@ import { csvUploads } from "@/lib/db/schema";
 import { getSession } from "@/lib/auth";
 import { eq, and, desc } from "drizzle-orm";
 
+// For Next.js App Router - route segment config
+export const runtime = "nodejs";
+export const maxDuration = 300; // 5 minutes timeout for large file processing
+export const dynamic = "force-dynamic";
+
 // Helper function to process transaction CSV data
 function processTransactionData(
   rawData: any[],

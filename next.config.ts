@@ -4,6 +4,11 @@ const nextConfig: NextConfig = {
   /* config options here */
   compress: true, // Enable gzip compression for responses
 
+  // Increase API body size limit for large CSV uploads (50MB)
+  serverActions: {
+    bodySizeLimit: "50mb",
+  },
+
   // Experimental features for better performance
   experimental: {
     optimizePackageImports: [
