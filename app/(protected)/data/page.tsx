@@ -97,22 +97,135 @@ export default function DataUploadPage() {
       const text = await file.text();
       const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
 
-      // Upload to backend
-      const response = await fetch("/api/csv-data", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileType,
-          data: parsed.data,
-        }),
+      // Check JSON size to decide if we need chunked upload
+      const jsonPayload = JSON.stringify({
+        fileType,
+        data: parsed.data,
       });
+      const jsonSizeMB = new Blob([jsonPayload]).size / (1024 * 1024);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Upload failed");
+      let responseData;
+
+      // Use chunked upload if file is > 3.5MB (to be safe)
+      if (jsonSizeMB > 3.5) {
+        toast.info("Large file detected, using chunked upload...", {
+          description: `File size: ${jsonSizeMB.toFixed(2)}MB`,
+        });
+
+        // Generate unique upload ID
+        const uploadId = `${fileType}-${Date.now()}-${Math.random()
+          .toString(36)
+          .substring(7)}`;
+
+        // Split data into chunks (each chunk should be < 3MB when stringified)
+        const chunkSize = Math.ceil(
+          parsed.data.length / Math.ceil(jsonSizeMB / 3)
+        );
+        const chunks: any[][] = [];
+
+        for (let i = 0; i < parsed.data.length; i += chunkSize) {
+          chunks.push(parsed.data.slice(i, i + chunkSize));
+        }
+
+        const totalChunks = chunks.length;
+
+        // Upload chunks sequentially
+        for (let i = 0; i < chunks.length; i++) {
+          const chunkPayload = JSON.stringify({
+            uploadId,
+            chunkIndex: i,
+            totalChunks,
+            fileType,
+            chunkData: chunks[i],
+          });
+
+          const chunkResponse = await fetch("/api/csv-data/chunk", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: chunkPayload,
+          });
+
+          if (!chunkResponse.ok) {
+            const errorData = await chunkResponse.json().catch(() => ({}));
+            throw new Error(
+              errorData.error ||
+                `Failed to upload chunk ${i + 1}/${totalChunks}`
+            );
+          }
+
+          const chunkResult = await chunkResponse.json();
+
+          // Update progress
+          toast.info(`Uploading... ${i + 1}/${totalChunks} chunks`, {
+            description: `Processing chunk ${i + 1} of ${totalChunks}`,
+          });
+
+          // If all chunks are received, the server has already processed the data
+          if (chunkResult.complete) {
+            responseData = chunkResult;
+            break;
+          }
+        }
+      } else {
+        // Normal upload for smaller files
+        const response = await fetch("/api/csv-data", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: jsonPayload,
+        });
+
+        if (!response.ok) {
+          // Handle 413 (Payload Too Large) - fallback to chunked upload
+          if (response.status === 413) {
+            toast.info("File too large, retrying with chunked upload...");
+            // Retry with chunked upload (recursive call would be cleaner, but let's inline it)
+            const uploadId = `${fileType}-${Date.now()}-${Math.random()
+              .toString(36)
+              .substring(7)}`;
+            const chunkSize = Math.ceil(
+              parsed.data.length / Math.ceil(jsonSizeMB / 3)
+            );
+            const chunks: any[][] = [];
+
+            for (let i = 0; i < parsed.data.length; i += chunkSize) {
+              chunks.push(parsed.data.slice(i, i + chunkSize));
+            }
+
+            for (let i = 0; i < chunks.length; i++) {
+              const chunkResponse = await fetch("/api/csv-data/chunk", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  uploadId,
+                  chunkIndex: i,
+                  totalChunks: chunks.length,
+                  fileType,
+                  chunkData: chunks[i],
+                }),
+              });
+
+              const chunkResult = await chunkResponse.json();
+              if (chunkResult.complete) {
+                responseData = chunkResult;
+                break;
+              }
+            }
+          } else {
+            // Other errors
+            let errorMessage = "Upload failed";
+            try {
+              const errorData = await response.json();
+              errorMessage = errorData.error || errorMessage;
+            } catch (e) {
+              errorMessage =
+                response.statusText || `Server error (${response.status})`;
+            }
+            throw new Error(errorMessage);
+          }
+        } else {
+          responseData = await response.json();
+        }
       }
-
-      const responseData = await response.json();
 
       // Clear cache and refetch status
       clearCache("csv-data");

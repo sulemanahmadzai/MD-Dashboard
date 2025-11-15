@@ -10,7 +10,7 @@ export const maxDuration = 300; // 5 minutes timeout for large file processing
 export const dynamic = "force-dynamic";
 
 // Helper function to process transaction CSV data
-function processTransactionData(
+export function processTransactionData(
   rawData: any[],
   fileType: "sgd_transactions" | "usd_transactions"
 ) {
@@ -250,7 +250,7 @@ function processTransactionData(
 }
 
 // Helper function to extract categories from P&L data
-function extractCategoriesFromPLData(rawData: any[]): string[] {
+export function extractCategoriesFromPLData(rawData: any[]): string[] {
   if (!rawData || rawData.length === 0) {
     throw new Error("No data found in P&L CSV file");
   }
