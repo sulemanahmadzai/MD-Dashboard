@@ -1,20 +1,10 @@
 {
-  "framework": "nextjs",
-  "buildCommand": "next build",
-  "installCommand": "npm install",
   "env": {
     "NEXT_TELEMETRY_DISABLED": "1"
   },
   "functions": {
     "app/api/csv-data/route.ts": {
-      "maxDuration": 300,
-      "memory": 3008
-    },
-    "app/**/*.ts": {
-      "maxDuration": 60
-    },
-    "app/**/*.tsx": {
-      "maxDuration": 60
+      "maxDuration": 300
     }
   }
 }
