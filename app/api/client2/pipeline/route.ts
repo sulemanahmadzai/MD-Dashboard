@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { pipelineDeals } from "@/lib/db/schema";
+import { pipelineDeals, users } from "@/lib/db/schema";
 import { getSession } from "@/lib/auth";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray, or } from "drizzle-orm";
 
-// GET - Fetch all pipeline deals for the current user
+// GET - Fetch all pipeline deals
+// - Admin sees all deals
+// - Client2 users see shared pool (all client2 + admin deals)
 export async function GET() {
   try {
     const session = await getSession();
@@ -12,11 +14,41 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const deals = await db
-      .select()
-      .from(pipelineDeals)
-      .where(eq(pipelineDeals.userId, session.id))
-      .orderBy(desc(pipelineDeals.createdAt));
+    let deals;
+
+    if (session.role === "admin") {
+      // Admin sees all deals
+      deals = await db
+        .select()
+        .from(pipelineDeals)
+        .orderBy(desc(pipelineDeals.createdAt));
+    } else if (session.role === "client2") {
+      // Client2 users see shared pool: all client2 + admin deals
+      // Get all client2 and admin user IDs
+      const sharedUsers = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(or(eq(users.role, "client2"), eq(users.role, "admin")));
+
+      const sharedUserIds = sharedUsers.map((u) => u.id);
+
+      if (sharedUserIds.length > 0) {
+        deals = await db
+          .select()
+          .from(pipelineDeals)
+          .where(inArray(pipelineDeals.userId, sharedUserIds))
+          .orderBy(desc(pipelineDeals.createdAt));
+      } else {
+        deals = [];
+      }
+    } else {
+      // Other roles only see their own data
+      deals = await db
+        .select()
+        .from(pipelineDeals)
+        .where(eq(pipelineDeals.userId, session.id))
+        .orderBy(desc(pipelineDeals.createdAt));
+    }
 
     return NextResponse.json({ deals });
   } catch (error) {
@@ -105,6 +137,25 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    // For client2 users, allow editing items from shared pool (client2 + admin)
+    let whereCondition;
+    if (session.role === "client2") {
+      const sharedUsers = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(or(eq(users.role, "client2"), eq(users.role, "admin")));
+      const sharedUserIds = sharedUsers.map((u) => u.id);
+      whereCondition = and(
+        eq(pipelineDeals.id, id),
+        inArray(pipelineDeals.userId, sharedUserIds)
+      );
+    } else {
+      whereCondition = and(
+        eq(pipelineDeals.id, id),
+        eq(pipelineDeals.userId, session.id)
+      );
+    }
+
     const [deal] = await db
       .update(pipelineDeals)
       .set({
@@ -117,9 +168,7 @@ export async function PUT(request: NextRequest) {
         revenueBreakdown,
         updatedAt: new Date(),
       })
-      .where(
-        and(eq(pipelineDeals.id, id), eq(pipelineDeals.userId, session.id))
-      )
+      .where(whereCondition)
       .returning();
 
     if (!deal) {
@@ -154,11 +203,26 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    await db
-      .delete(pipelineDeals)
-      .where(
-        and(eq(pipelineDeals.id, id), eq(pipelineDeals.userId, session.id))
+    // For client2 users, allow deleting items from shared pool (client2 + admin)
+    let whereCondition;
+    if (session.role === "client2") {
+      const sharedUsers = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(or(eq(users.role, "client2"), eq(users.role, "admin")));
+      const sharedUserIds = sharedUsers.map((u) => u.id);
+      whereCondition = and(
+        eq(pipelineDeals.id, id),
+        inArray(pipelineDeals.userId, sharedUserIds)
       );
+    } else {
+      whereCondition = and(
+        eq(pipelineDeals.id, id),
+        eq(pipelineDeals.userId, session.id)
+      );
+    }
+
+    await db.delete(pipelineDeals).where(whereCondition);
 
     return NextResponse.json({ message: "Deal deleted successfully" });
   } catch (error) {

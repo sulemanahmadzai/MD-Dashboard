@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { projects } from "@/lib/db/schema";
+import { projects, users } from "@/lib/db/schema";
 import { getSession } from "@/lib/auth";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray, or } from "drizzle-orm";
 
-// GET - Fetch all projects for the current user
+// GET - Fetch all projects
+// - Admin sees all projects
+// - Client2 users see shared pool (all client2 + admin projects)
 export async function GET() {
   try {
     const session = await getSession();
@@ -12,11 +14,38 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const userProjects = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.userId, session.id))
-      .orderBy(desc(projects.date));
+    let userProjects;
+
+    if (session.role === "admin") {
+      // Admin sees all projects
+      userProjects = await db.select().from(projects).orderBy(desc(projects.date));
+    } else if (session.role === "client2") {
+      // Client2 users see shared pool: all client2 + admin projects
+      // Get all client2 and admin user IDs
+      const sharedUsers = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(or(eq(users.role, "client2"), eq(users.role, "admin")));
+
+      const sharedUserIds = sharedUsers.map((u) => u.id);
+
+      if (sharedUserIds.length > 0) {
+        userProjects = await db
+          .select()
+          .from(projects)
+          .where(inArray(projects.userId, sharedUserIds))
+          .orderBy(desc(projects.date));
+      } else {
+        userProjects = [];
+      }
+    } else {
+      // Other roles only see their own data
+      userProjects = await db
+        .select()
+        .from(projects)
+        .where(eq(projects.userId, session.id))
+        .orderBy(desc(projects.date));
+    }
 
     return NextResponse.json({ projects: userProjects });
   } catch (error) {
@@ -110,13 +139,32 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    // For client2 users, allow editing items from shared pool (client2 + admin)
+    let whereCondition;
+    if (session.role === "client2") {
+      const sharedUsers = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(or(eq(users.role, "client2"), eq(users.role, "admin")));
+      const sharedUserIds = sharedUsers.map((u) => u.id);
+      whereCondition = and(
+        eq(projects.id, id),
+        inArray(projects.userId, sharedUserIds)
+      );
+    } else {
+      whereCondition = and(
+        eq(projects.id, id),
+        eq(projects.userId, session.id)
+      );
+    }
+
     const [project] = await db
       .update(projects)
       .set({
         ...updateData,
         updatedAt: new Date(),
       })
-      .where(and(eq(projects.id, id), eq(projects.userId, session.id)))
+      .where(whereCondition)
       .returning();
 
     if (!project) {
@@ -151,9 +199,26 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    await db
-      .delete(projects)
-      .where(and(eq(projects.id, id), eq(projects.userId, session.id)));
+    // For client2 users, allow deleting items from shared pool (client2 + admin)
+    let whereCondition;
+    if (session.role === "client2") {
+      const sharedUsers = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(or(eq(users.role, "client2"), eq(users.role, "admin")));
+      const sharedUserIds = sharedUsers.map((u) => u.id);
+      whereCondition = and(
+        eq(projects.id, id),
+        inArray(projects.userId, sharedUserIds)
+      );
+    } else {
+      whereCondition = and(
+        eq(projects.id, id),
+        eq(projects.userId, session.id)
+      );
+    }
+
+    await db.delete(projects).where(whereCondition);
 
     return NextResponse.json({ message: "Project deleted successfully" });
   } catch (error) {

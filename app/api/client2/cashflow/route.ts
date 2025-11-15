@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { cashflowTransactions } from "@/lib/db/schema";
+import { cashflowTransactions, users } from "@/lib/db/schema";
 import { getSession } from "@/lib/auth";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray, or } from "drizzle-orm";
 
-// GET - Fetch all cashflow transactions for the current user
+// GET - Fetch all cashflow transactions
+// - Admin sees all transactions
+// - Client2 users see shared pool (all client2 + admin transactions)
 export async function GET() {
   try {
     const session = await getSession();
@@ -12,11 +14,41 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const transactions = await db
-      .select()
-      .from(cashflowTransactions)
-      .where(eq(cashflowTransactions.userId, session.id))
-      .orderBy(desc(cashflowTransactions.date));
+    let transactions;
+
+    if (session.role === "admin") {
+      // Admin sees all transactions
+      transactions = await db
+        .select()
+        .from(cashflowTransactions)
+        .orderBy(desc(cashflowTransactions.date));
+    } else if (session.role === "client2") {
+      // Client2 users see shared pool: all client2 + admin transactions
+      // Get all client2 and admin user IDs
+      const sharedUsers = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(or(eq(users.role, "client2"), eq(users.role, "admin")));
+
+      const sharedUserIds = sharedUsers.map((u) => u.id);
+
+      if (sharedUserIds.length > 0) {
+        transactions = await db
+          .select()
+          .from(cashflowTransactions)
+          .where(inArray(cashflowTransactions.userId, sharedUserIds))
+          .orderBy(desc(cashflowTransactions.date));
+      } else {
+        transactions = [];
+      }
+    } else {
+      // Other roles only see their own data
+      transactions = await db
+        .select()
+        .from(cashflowTransactions)
+        .where(eq(cashflowTransactions.userId, session.id))
+        .orderBy(desc(cashflowTransactions.date));
+    }
 
     return NextResponse.json({ transactions });
   } catch (error) {
@@ -86,6 +118,25 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    // For client2 users, allow editing items from shared pool (client2 + admin)
+    let whereCondition;
+    if (session.role === "client2") {
+      const sharedUsers = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(or(eq(users.role, "client2"), eq(users.role, "admin")));
+      const sharedUserIds = sharedUsers.map((u) => u.id);
+      whereCondition = and(
+        eq(cashflowTransactions.id, id),
+        inArray(cashflowTransactions.userId, sharedUserIds)
+      );
+    } else {
+      whereCondition = and(
+        eq(cashflowTransactions.id, id),
+        eq(cashflowTransactions.userId, session.id)
+      );
+    }
+
     const [transaction] = await db
       .update(cashflowTransactions)
       .set({
@@ -96,12 +147,7 @@ export async function PUT(request: NextRequest) {
         amount,
         updatedAt: new Date(),
       })
-      .where(
-        and(
-          eq(cashflowTransactions.id, id),
-          eq(cashflowTransactions.userId, session.id)
-        )
-      )
+      .where(whereCondition)
       .returning();
 
     if (!transaction) {
@@ -139,14 +185,26 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    await db
-      .delete(cashflowTransactions)
-      .where(
-        and(
-          eq(cashflowTransactions.id, id),
-          eq(cashflowTransactions.userId, session.id)
-        )
+    // For client2 users, allow deleting items from shared pool (client2 + admin)
+    let whereCondition;
+    if (session.role === "client2") {
+      const sharedUsers = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(or(eq(users.role, "client2"), eq(users.role, "admin")));
+      const sharedUserIds = sharedUsers.map((u) => u.id);
+      whereCondition = and(
+        eq(cashflowTransactions.id, id),
+        inArray(cashflowTransactions.userId, sharedUserIds)
       );
+    } else {
+      whereCondition = and(
+        eq(cashflowTransactions.id, id),
+        eq(cashflowTransactions.userId, session.id)
+      );
+    }
+
+    await db.delete(cashflowTransactions).where(whereCondition);
 
     return NextResponse.json({ message: "Transaction deleted successfully" });
   } catch (error) {

@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { projectCosts } from "@/lib/db/schema";
+import { projectCosts, users } from "@/lib/db/schema";
 import { getSession } from "@/lib/auth";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray, or } from "drizzle-orm";
 
-// GET - Fetch all project costs for the current user
+// GET - Fetch all project costs
+// - Admin sees all project costs
+// - Client2 users see shared pool (all client2 + admin project costs)
 export async function GET() {
   try {
     const session = await getSession();
@@ -12,11 +14,41 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const costs = await db
-      .select()
-      .from(projectCosts)
-      .where(eq(projectCosts.userId, session.id))
-      .orderBy(desc(projectCosts.monthYear));
+    let costs;
+
+    if (session.role === "admin") {
+      // Admin sees all project costs
+      costs = await db
+        .select()
+        .from(projectCosts)
+        .orderBy(desc(projectCosts.monthYear));
+    } else if (session.role === "client2") {
+      // Client2 users see shared pool: all client2 + admin project costs
+      // Get all client2 and admin user IDs
+      const sharedUsers = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(or(eq(users.role, "client2"), eq(users.role, "admin")));
+
+      const sharedUserIds = sharedUsers.map((u) => u.id);
+
+      if (sharedUserIds.length > 0) {
+        costs = await db
+          .select()
+          .from(projectCosts)
+          .where(inArray(projectCosts.userId, sharedUserIds))
+          .orderBy(desc(projectCosts.monthYear));
+      } else {
+        costs = [];
+      }
+    } else {
+      // Other roles only see their own data
+      costs = await db
+        .select()
+        .from(projectCosts)
+        .where(eq(projectCosts.userId, session.id))
+        .orderBy(desc(projectCosts.monthYear));
+    }
 
     return NextResponse.json({ projectCosts: costs });
   } catch (error) {
@@ -108,13 +140,32 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    // For client2 users, allow editing items from shared pool (client2 + admin)
+    let whereCondition;
+    if (session.role === "client2") {
+      const sharedUsers = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(or(eq(users.role, "client2"), eq(users.role, "admin")));
+      const sharedUserIds = sharedUsers.map((u) => u.id);
+      whereCondition = and(
+        eq(projectCosts.id, id),
+        inArray(projectCosts.userId, sharedUserIds)
+      );
+    } else {
+      whereCondition = and(
+        eq(projectCosts.id, id),
+        eq(projectCosts.userId, session.id)
+      );
+    }
+
     const [cost] = await db
       .update(projectCosts)
       .set({
         ...updateData,
         updatedAt: new Date(),
       })
-      .where(and(eq(projectCosts.id, id), eq(projectCosts.userId, session.id)))
+      .where(whereCondition)
       .returning();
 
     if (!cost) {
@@ -152,9 +203,26 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    await db
-      .delete(projectCosts)
-      .where(and(eq(projectCosts.id, id), eq(projectCosts.userId, session.id)));
+    // For client2 users, allow deleting items from shared pool (client2 + admin)
+    let whereCondition;
+    if (session.role === "client2") {
+      const sharedUsers = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(or(eq(users.role, "client2"), eq(users.role, "admin")));
+      const sharedUserIds = sharedUsers.map((u) => u.id);
+      whereCondition = and(
+        eq(projectCosts.id, id),
+        inArray(projectCosts.userId, sharedUserIds)
+      );
+    } else {
+      whereCondition = and(
+        eq(projectCosts.id, id),
+        eq(projectCosts.userId, session.id)
+      );
+    }
+
+    await db.delete(projectCosts).where(whereCondition);
 
     return NextResponse.json({ message: "Project cost deleted successfully" });
   } catch (error) {
