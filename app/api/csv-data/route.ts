@@ -376,7 +376,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    // Parse request body with better error handling for large files
+    let body;
+    try {
+      body = await request.json();
+    } catch (error: any) {
+      console.error("Error parsing request body:", error);
+      // Check if it's a body size issue
+      if (error.message?.includes("body") || error.message?.includes("size")) {
+        return NextResponse.json(
+          {
+            error:
+              "File too large. Vercel has a 4.5MB limit for request bodies. Please split your CSV file or reduce its size.",
+          },
+          { status: 413 }
+        );
+      }
+      return NextResponse.json(
+        { error: "Invalid request body. Please check your file format." },
+        { status: 400 }
+      );
+    }
+
     const { fileType, data } = body;
 
     if (!fileType || !data) {
